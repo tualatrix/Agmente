@@ -352,13 +352,17 @@ private struct ServerSummaryOverlay: View {
         workingDirectory == "/"
     }
 
+    private var isCodexServer: Bool {
+        validation.serverType == .codexAppServer || validation.agentInfo?.name == "codex-app-server"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Review agent limitations")
                         .font(.title3.weight(.semibold))
-                    Text("Before inserting \(displayName), confirm what this agent reports supporting.")
+                    Text("Before inserting \(displayName), confirm what this server reports supporting.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -386,7 +390,11 @@ private struct ServerSummaryOverlay: View {
                             Text("Authentication Required")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
-                            Text("Make sure you have authenticated with the agent CLI (OAuth, API key, etc.) before connecting. Agmente does not handle agent authentication.")
+                            Text(
+                                isCodexServer
+                                ? "Make sure Codex CLI is already authenticated (for example, run `codex login`) before connecting. Agmente does not handle Codex authentication."
+                                : "Make sure you have authenticated with the agent CLI (OAuth, API key, etc.) before connecting. Agmente does not handle agent authentication."
+                            )
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -438,10 +446,14 @@ private struct ServerSummaryOverlay: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
-                            AgentCapabilitiesSummary(
-                                capabilities: agentInfo.capabilities,
-                                verifications: agentInfo.verifications
-                            )
+                            if isCodexServer {
+                                CodexProtocolSummary()
+                            } else {
+                                AgentCapabilitiesSummary(
+                                    capabilities: agentInfo.capabilities,
+                                    verifications: agentInfo.verifications
+                                )
+                            }
                         }
                     } else {
                         Label {
