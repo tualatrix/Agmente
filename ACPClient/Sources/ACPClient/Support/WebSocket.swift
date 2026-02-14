@@ -15,14 +15,14 @@ public protocol WebSocketConnection: AnyObject, Sendable {
     func ping() async throws
 }
 
-public enum WebSocketEvent: Equatable {
+public enum WebSocketEvent: Equatable, Sendable {
     case connected
     case text(String)
     case binary(Data)
     case closed(WebSocketCloseReason)
 }
 
-public struct WebSocketCloseReason: Equatable {
+public struct WebSocketCloseReason: Equatable, Sendable {
     public var code: Int
     public var reason: String?
 
