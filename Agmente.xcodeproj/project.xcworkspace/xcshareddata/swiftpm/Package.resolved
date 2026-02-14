@@ -2,6 +2,15 @@
   "originHash" : "6b4dac47a9564aaeafad37b75fb169d42bde22dcbe14099946c30fd09fc4b5cc",
   "pins" : [
     {
+      "identity" : "acp-swift-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rebornix/acp-swift-sdk",
+      "state" : {
+        "branch" : "main",
+        "revision" : "b800b3f2c251e3453fdd10172d671123e1908301"
+      }
+    },
+    {
       "identity" : "swift-log",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
