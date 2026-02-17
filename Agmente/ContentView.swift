@@ -600,6 +600,16 @@ private struct SessionListPage: View {
             }
         }
     }
+
+    private var newSessionButtonTint: Color {
+        colorScheme == .dark
+            ? Color(red: 0.12, green: 0.13, blue: 0.18)
+            : .black
+    }
+
+    private var newSessionButtonForeground: Color {
+        .white
+    }
     
     @available(iOS 26.0, *)
     private func newSessionButtonModern(expanded: Bool) -> some View {
@@ -608,11 +618,18 @@ private struct SessionListPage: View {
                 guard model.connectionState == .connected else { return }
                 model.sendNewSession()
             } label: {
-                Label("New Session", systemImage: "plus")
-                    .frame(maxWidth: expanded ? .infinity : nil)
+                Label {
+                    Text("New Session")
+                        .foregroundStyle(.white)
+                } icon: {
+                    Image(systemName: "plus")
+                        .foregroundStyle(.white)
+                }
+                .frame(maxWidth: expanded ? .infinity : nil)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.accentColor)
+            .tint(newSessionButtonTint)
+            .foregroundStyle(newSessionButtonForeground)
             .controlSize(.large)
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0))
             .accessibilityIdentifier("newSessionButton")
@@ -629,9 +646,11 @@ private struct SessionListPage: View {
                 Image(systemName: "chevron.down")
                     .font(.caption.weight(.semibold))
                     .frame(width: 32, height: 44)
+                    .foregroundStyle(.white)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.accentColor)
+            .tint(newSessionButtonTint)
+            .foregroundStyle(newSessionButtonForeground)
             .controlSize(.large)
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 10, topTrailingRadius: 10))
             .accessibilityIdentifier("newSessionMenuButton")
@@ -652,7 +671,8 @@ private struct SessionListPage: View {
                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0))
             }
             .buttonStyle(.borderedProminent)
-            .tint(.accentColor)
+            .tint(newSessionButtonTint)
+            .foregroundStyle(newSessionButtonForeground)
             
             Menu {
                 Button {
@@ -669,7 +689,8 @@ private struct SessionListPage: View {
                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 10, topTrailingRadius: 10))
             }
             .buttonStyle(.borderedProminent)
-            .tint(.accentColor)
+            .tint(newSessionButtonTint)
+            .foregroundStyle(newSessionButtonForeground)
         }
         .opacity(model.connectionState != .connected ? 0.7 : 1)
     }
