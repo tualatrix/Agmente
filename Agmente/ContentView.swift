@@ -132,6 +132,7 @@ private extension ContentView {
             // Use .id() to force re-render when session state changes.
             Group {
                 if let serverViewModel = model.selectedServerViewModel,
+                   serverViewModel.selectedSessionId == sessionId,
                    let sessionViewModel = serverViewModel.currentSessionViewModel {
                     // ACP server
                     SessionDetailView(
@@ -140,6 +141,7 @@ private extension ContentView {
                         sessionViewModel: sessionViewModel
                     )
                 } else if let codexViewModel = model.selectedCodexServerViewModel,
+                          codexViewModel.selectedSessionId == sessionId,
                           let sessionViewModel = codexViewModel.currentSessionViewModel {
                     // Codex server
                     CodexSessionDetailView(
@@ -154,7 +156,7 @@ private extension ContentView {
             }
             // Force view re-evaluation when session state changes
             .id(model.serverSessionId)
-            .task {
+            .task(id: sessionId) {
                 model.openSession(sessionId)
             }
         case .developerLogs:

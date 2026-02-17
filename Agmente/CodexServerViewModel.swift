@@ -113,6 +113,8 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
     private var activeTurnId: String?
     private var lastResumeAtByThreadId: [String: Date] = [:]
     private var postResumeRefreshTask: Task<Void, Never>?
+    private var openSessionTask: Task<Void, Never>?
+    private var openSessionRequestToken: UInt64 = 0
     private var needsInitializedAck: Bool = false
     private var reasoningCache: [String: String] = [:]
 
@@ -172,6 +174,7 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
     }
 
     deinit {
+        openSessionTask?.cancel()
         let logger = sessionLogger
         Task { [logger] in
             await logger?.endSession()
@@ -224,6 +227,7 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
     }
 
     func removeAllSessionViewModels() {
+        cancelOpenSessionTask()
         cancelPostResumeRefreshTask()
         sessionViewModels.removeAll()
         for cancellable in sessionViewModelCancellables.values {
@@ -390,21 +394,38 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
     }
 
     func openSession(_ id: String) {
+        let pendingCwd = sessionSummaries.first(where: { $0.id == id })?.cwd
+        let requestToken = beginOpenSessionRequest(id, cwd: pendingCwd)
         // For Codex, we use thread/resume to fetch full history from server
-        Task { @MainActor [weak self] in
+        openSessionTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer {
+                if isCurrentOpenSessionRequest(requestToken, for: id) {
+                    openSessionTask = nil
+                }
+            }
+
+            guard isCurrentOpenSessionRequest(requestToken, for: id) else {
+                trace("openSession skip stale-start thread=\(id)")
+                return
+            }
+
             cancelPostResumeRefreshTask()
             trace("openSession begin thread=\(id) selectedSession=\(selectedSessionId ?? "nil") activeThread=\(activeThreadId ?? "nil") activeTurn=\(activeTurnId ?? "nil") state=\(String(describing: connectionState))")
             guard let service = getServiceClosure() else {
                 trace("openSession fallback: service=nil")
                 appendClosure("Not connected - falling back to local cache")
-                setActiveSession(id, cwd: nil, modes: nil)
+                if isCurrentOpenSessionRequest(requestToken, for: id) {
+                    pendingSessionLoad = nil
+                }
                 return
             }
             guard connectionState == .connected else {
                 trace("openSession fallback: state=\(String(describing: connectionState))")
                 appendClosure("Not connected - falling back to local cache")
-                setActiveSession(id, cwd: nil, modes: nil)
+                if isCurrentOpenSessionRequest(requestToken, for: id) {
+                    pendingSessionLoad = nil
+                }
                 return
             }
             _ = service
@@ -415,7 +436,6 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                     fetchModels()
                 }
 
-                let pendingCwd = sessionSummaries.first(where: { $0.id == id })?.cwd
                 let existingMessages = sessionViewModels[id]?.chatMessages ?? []
                 let hadStreamingBeforeResume = (id == sessionId && activeTurnId != nil)
                     || existingMessages.contains(where: { $0.isStreaming })
@@ -445,15 +465,16 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                     hydrationSource = "thread/resume-fallback"
                 }
 
+                guard isCurrentOpenSessionRequest(requestToken, for: id), !Task.isCancelled else {
+                    trace("openSession discard stale-result thread=\(id)")
+                    return
+                }
+
                 lastResumeAtByThreadId[id] = Date()
                 let resumedItems = result.turns.reduce(0) { $0 + $1.items.count }
                 trace(
                     "openSession hydrate result source=\(hydrationSource) thread=\(result.id) turns=\(result.turns.count) items=\(resumedItems) activeTurnId=\(result.activeTurnId ?? "nil")"
                 )
-
-                // Set the session active without loading from Core Data
-                sessionId = id
-                selectedSessionId = id
 
                 let shouldPreserve = shouldPreserveLocalChatState(
                     existingMessages: existingMessages,
@@ -510,6 +531,11 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                 }
 
                 // Update session info
+                guard isCurrentOpenSessionRequest(requestToken, for: id), !Task.isCancelled else {
+                    trace("openSession discard stale-apply thread=\(id)")
+                    return
+                }
+
                 if let cwd = result.cwd {
                     rememberSession(id, cwd: cwd)
                 } else {
@@ -532,7 +558,13 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                 }
                 trace("openSession end thread=\(id) chatMessages=\(currentSessionViewModel?.chatMessages.count ?? -1)")
                 appendClosure("Loaded \(result.turns.count) turn(s) from Codex thread via \(hydrationSource)")
+            } catch is CancellationError {
+                trace("openSession canceled thread=\(id)")
             } catch {
+                guard isCurrentOpenSessionRequest(requestToken, for: id), !Task.isCancelled else {
+                    trace("openSession ignored stale-failure thread=\(id) error=\(error.localizedDescription)")
+                    return
+                }
                 trace("openSession resume failed thread=\(id) error=\(error.localizedDescription)")
                 appendClosure("Failed to resume thread: \(error.localizedDescription) - falling back to local cache")
                 // Fall back to local storage if thread/resume fails
@@ -1662,6 +1694,33 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
     private func cancelPostResumeRefreshTask() {
         postResumeRefreshTask?.cancel()
         postResumeRefreshTask = nil
+    }
+
+    private func beginOpenSessionRequest(_ id: String, cwd: String?) -> UInt64 {
+        cancelOpenSessionTask()
+
+        openSessionRequestToken &+= 1
+        let requestToken = openSessionRequestToken
+
+        pendingSessionLoad = id
+        sessionId = id
+        selectedSessionId = id
+        activeThreadId = id
+        activeTurnId = nil
+        reasoningCache.removeAll()
+        currentSessionViewModel?.setSessionContext(serverId: self.id, sessionId: id)
+        rememberSession(id, cwd: cwd)
+
+        return requestToken
+    }
+
+    private func isCurrentOpenSessionRequest(_ requestToken: UInt64, for id: String) -> Bool {
+        requestToken == openSessionRequestToken && sessionId == id && selectedSessionId == id
+    }
+
+    private func cancelOpenSessionTask() {
+        openSessionTask?.cancel()
+        openSessionTask = nil
     }
 
     private func applyStreamingStateFromResume(_ result: CodexThreadResumeResult) {
