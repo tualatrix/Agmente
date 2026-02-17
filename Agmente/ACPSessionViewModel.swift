@@ -1023,5 +1023,6 @@ final class ACPSessionViewModel: ObservableObject {
     /// Set chat messages directly (for backward compatibility).
     func setChatMessages(_ messages: [ChatMessage]) {
         chatMessages = messages
+        restoreStreamingState(from: messages)
     }
 }

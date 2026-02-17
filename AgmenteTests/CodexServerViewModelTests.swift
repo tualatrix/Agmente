@@ -42,82 +42,6 @@ final class CodexServerViewModelTests: XCTestCase {
         return ACPService(client: client)
     }
 
-    private final class ScriptedCodexConnection: WebSocketConnection, @unchecked Sendable {
-        private actor State {
-            var events: [WebSocketEvent] = []
-
-            func enqueue(_ event: WebSocketEvent) {
-                events.append(event)
-            }
-
-            func dequeue() -> WebSocketEvent? {
-                guard !events.isEmpty else { return nil }
-                return events.removeFirst()
-            }
-        }
-
-        private let state = State()
-
-        func connect(headers: [String : String]) async throws {}
-
-        func send(text: String) async throws {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let data = trimmed.data(using: .utf8),
-                  let wireMessage = try? JSONDecoder().decode(ACPWireMessage.self, from: data),
-                  case let .request(request) = wireMessage else {
-                return
-            }
-
-            switch request.method {
-            case "initialize":
-                await enqueueResponse(.response(ACP.AnyResponse(id: request.id, result: .object([:]))))
-            case "turn/start":
-                let error = ACPError.invalidParams("turn/start.collaborationMode requires experimentalApi capability")
-                await enqueueResponse(.response(ACP.AnyResponse(id: request.id, error: error)))
-            default:
-                break
-            }
-        }
-
-        func receive() async throws -> WebSocketEvent {
-            if let event = await state.dequeue() {
-                return event
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-            return .connected
-        }
-
-        func close() async {}
-
-        func ping() async throws {}
-
-        private func enqueueResponse(_ response: ACPWireMessage) async {
-            guard let data = try? JSONEncoder().encode(response),
-                  let text = String(data: data, encoding: .utf8) else {
-                return
-            }
-            await state.enqueue(.text(text))
-        }
-    }
-
-    private struct ScriptedWebSocketProvider: WebSocketProviding, @unchecked Sendable {
-        let connection: ScriptedCodexConnection
-
-        func makeConnection(url: URL) -> WebSocketConnection {
-            connection
-        }
-    }
-
-    private func makeConnectedService(connection: ScriptedCodexConnection) async throws -> ACPService {
-        let url = URL(string: "ws://localhost:1234")!
-        let config = ACPClientConfiguration(endpoint: url, pingInterval: nil, appendNewline: true)
-        let provider = ScriptedWebSocketProvider(connection: connection)
-        let client = ACPClient(configuration: config, socketProvider: provider)
-        let service = ACPService(client: client)
-        try await service.connect()
-        return service
-    }
-
     // MARK: - ViewModel Switch Tests
 
     /// Test that ServerViewModel is switched to CodexServerViewModel after Codex initialize.
@@ -328,49 +252,118 @@ final class CodexServerViewModelTests: XCTestCase {
         XCTAssertNil(codexVM?.pendingSessionLoad, "Codex should not have pending session load")
     }
 
-    func testCodexPromptError_ShowsRestartGuidanceForExperimentalApiCapabilityError() async throws {
+    /// Streaming state should follow turn lifecycle notifications so the UI can toggle stop/send reliably.
+    func testCodexServerViewModel_StreamingTracksTurnLifecycle() {
         let model = makeModel()
         addServer(to: model)
 
-        let connection = ScriptedCodexConnection()
-        let service = try await makeConnectedService(connection: connection)
-        model.setServiceForTesting(service)
-
-        // Switch to Codex mode.
+        // Switch to Codex
+        let service = makeService()
         let initRequest = ACP.AnyRequest(id: .int(1), method: "initialize", params: nil)
         model.acpService(service, willSend: initRequest)
-        let initResult: ACP.Value = .object([
+        let result: ACP.Value = .object([
             "userAgent": .string("codex/1.0.0"),
         ])
-        model.acpService(service, didReceiveMessage: .response(ACP.AnyResponse(id: .int(1), result: initResult)))
+        model.acpService(service, didReceiveMessage: .response(ACP.AnyResponse(id: .int(1), result: result)))
 
         guard let codexVM = model.selectedCodexServerViewModel else {
             XCTFail("Expected CodexServerViewModel")
             return
         }
 
-        codexVM.setActiveSession("thread-123", cwd: "/workspace", modes: nil)
-        codexVM.sendPrompt(promptText: "design a logging helper", images: [], commandName: nil)
+        codexVM.setActiveSession("thread-789", cwd: "/workspace", modes: nil)
+        XCTAssertFalse(codexVM.isStreaming, "Thread should not stream before turn start")
 
-        let deadline = Date().addingTimeInterval(1.0)
-        var displayedError: String?
+        let turnStarted = JSONRPCMessage.notification(
+            JSONRPCNotification(
+                method: "turn/started",
+                params: .object([
+                    "threadId": .string("thread-789"),
+                    "turn": .object(["id": .string("turn-1")]),
+                ])
+            )
+        )
+        codexVM.handleCodexMessage(turnStarted)
 
-        while Date() < deadline {
-            if let message = codexVM.currentSessionViewModel?.chatMessages.last(where: { $0.role == .system && $0.isError })?.content {
-                displayedError = message
-                break
-            }
-            try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertTrue(codexVM.isStreaming, "turn/started should enable streaming state")
+        XCTAssertEqual(codexVM.currentSessionViewModel?.chatMessages.last?.isStreaming, true)
+
+        let turnCompleted = JSONRPCMessage.notification(
+            JSONRPCNotification(
+                method: "turn/completed",
+                params: .object([
+                    "threadId": .string("thread-789"),
+                    "turn": .object(["id": .string("turn-1")]),
+                ])
+            )
+        )
+        codexVM.handleCodexMessage(turnCompleted)
+
+        XCTAssertFalse(codexVM.isStreaming, "turn/completed should clear streaming state")
+        XCTAssertEqual(codexVM.currentSessionViewModel?.chatMessages.last?.isStreaming, false)
+    }
+
+    /// Reconnect races can leave a stale active turn ID; incoming deltas should realign instead of being dropped.
+    func testCodexServerViewModel_ItemDeltaRealignsStaleActiveTurn() {
+        let model = makeModel()
+        addServer(to: model)
+
+        // Switch to Codex
+        let service = makeService()
+        let initRequest = ACP.AnyRequest(id: .int(1), method: "initialize", params: nil)
+        model.acpService(service, willSend: initRequest)
+        let result: ACP.Value = .object([
+            "userAgent": .string("codex/1.0.0"),
+        ])
+        model.acpService(service, didReceiveMessage: .response(ACP.AnyResponse(id: .int(1), result: result)))
+
+        guard let codexVM = model.selectedCodexServerViewModel else {
+            XCTFail("Expected CodexServerViewModel")
+            return
         }
 
-        XCTAssertNotNil(displayedError, "Expected an error message to be shown in chat")
-        XCTAssertTrue(
-            displayedError?.contains("turn/start.collaborationMode requires experimentalApi capability") == true,
-            "Should preserve server error details"
+        codexVM.setActiveSession("thread-101", cwd: "/workspace", modes: nil)
+
+        // Start with a stale active turn ID.
+        let oldTurnStarted = JSONRPCMessage.notification(
+            JSONRPCNotification(
+                method: "turn/started",
+                params: .object([
+                    "threadId": .string("thread-101"),
+                    "turn": .object(["id": .string("turn-old")]),
+                ])
+            )
         )
-        XCTAssertTrue(
-            displayedError?.contains("Try fully restarting the Codex app-server") == true,
-            "Should include restart guidance for stale server initialization state"
+        codexVM.handleCodexMessage(oldTurnStarted)
+
+        // Incoming delta arrives for a newer turn; this should be applied (not dropped).
+        let delta = JSONRPCMessage.notification(
+            JSONRPCNotification(
+                method: "item/agentMessage/delta",
+                params: .object([
+                    "threadId": .string("thread-101"),
+                    "turnId": .string("turn-new"),
+                    "delta": .string("hello"),
+                ])
+            )
         )
+        codexVM.handleCodexMessage(delta)
+
+        XCTAssertTrue(codexVM.currentSessionViewModel?.chatMessages.last?.content.contains("hello") == true)
+        XCTAssertTrue(codexVM.isStreaming, "Delta should keep session streaming")
+
+        // Completion for the new turn should now be accepted and end streaming.
+        let newTurnCompleted = JSONRPCMessage.notification(
+            JSONRPCNotification(
+                method: "turn/completed",
+                params: .object([
+                    "threadId": .string("thread-101"),
+                    "turn": .object(["id": .string("turn-new")]),
+                ])
+            )
+        )
+        codexVM.handleCodexMessage(newTurnCompleted)
+
+        XCTAssertFalse(codexVM.isStreaming)
     }
 }

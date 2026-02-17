@@ -17,11 +17,16 @@ SwiftUI app layer and protocol routing logic:
 - ACP and Codex paths must remain protocol-isolated.
 - UI should consume unified protocol (`ServerViewModelProtocol`) where possible.
 - Session/thread summaries should preserve server metadata (`cwd`, timestamps) when available.
+- Codex reconnect/resume must be non-destructive for active sessions: prefer richer in-memory chat/tool-call state when `thread/resume` is incomplete, and restore streaming/stop state from active turn status.
+- On reconnect (and open when possible), prefer non-destructive reattachment to loaded in-memory threads via `addConversationListener` + `thread/read`; only fall back to `thread/resume` when the thread is not loaded or listener attach is unavailable.
+- For resume-based hydration paths, issue at least one follow-up `thread/resume` to converge eventual-consistency gaps where streaming deltas are not replayed.
+- Use `persistExtendedHistory: true` on `thread/start` and `thread/resume` so cold app relaunch can recover richer tool-call history from rollout-backed reads.
 
 ## Change Impact Rules
 - Protocol detection changes must validate both first-connect and reconnect behavior.
 - Session/thread list parsing changes must preserve ordering and metadata consistency.
 - Open-session behavior must not regress summary metadata or current working directory display.
+- Reconnect/background-resume changes must verify active-thread resubscription, streaming indicator state, and stop/send button behavior.
 - Add-server form or summary dialog changes must keep ACP and Codex messaging clearly separated.
 
 ## Contribution Checklist

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repeat With Delay"
+  short_description: "Run repeated command tool calls with delay and counter"
+  default_prompt: "Run a shell command as separate per-iteration tool calls, defaulting to 10 iterations with a 2-second delay and an incrementing counter."
