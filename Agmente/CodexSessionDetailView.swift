@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import ACPClient
+import enum AppServerClient.AppServerSkillScope
 
 /// Session detail view for Codex app-server connections.
 /// Mirrors SessionDetailView but uses CodexServerViewModel.
