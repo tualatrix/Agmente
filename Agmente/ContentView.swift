@@ -496,7 +496,7 @@ private struct SessionListPage: View {
                             groupingMode = groupingMode.toggled
                         }
                     } label: {
-                        Image(systemName: groupingMode == .byTime ? "folder" : "clock")
+                        Image(systemName: groupingMode.systemImage)
                     }
                     .accessibilityLabel(groupingMode == .byTime ? "Group by folder" : "Group by time")
                     .accessibilityIdentifier("sessionGroupingToggle")
@@ -790,7 +790,7 @@ private struct SessionListPage: View {
                 .textCase(.uppercase)
 
             VStack(spacing: 12) {
-                ForEach(sessions) { session in
+                ForEach(sessions, id: \.id) { session in
                     let summary = session.summary
                     let displayCwd = summary.cwd ?? defaultCwd
                     NavigationLink(value: NavigationDestination.session(summary.id)) {
@@ -817,22 +817,10 @@ private struct SessionListPage: View {
         let defaultCwd = model.defaultWorkingDirectory
 
         return VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(group.displayName)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                if !group.path.isEmpty && group.displayName != group.path {
-                    Text(group.path)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
+            FolderHeaderCard(displayName: group.displayName, path: group.path)
 
             VStack(spacing: 12) {
-                ForEach(sessions) { session in
+                ForEach(sessions, id: \.id) { session in
                     let summary = session.summary
                     let displayCwd = summary.cwd ?? defaultCwd
                     NavigationLink(value: NavigationDestination.session(summary.id)) {
@@ -842,7 +830,8 @@ private struct SessionListPage: View {
                                 model.getLastMessagePreview(for: $0, sessionId: summary.id)
                             },
                             cwd: displayCwd,
-                            isActive: session.isActive
+                            isActive: session.isActive,
+                            showCwd: false
                         )
                     }
                     .buttonStyle(.plain)
@@ -854,15 +843,14 @@ private struct SessionListPage: View {
                         displayName: group.displayName
                     )) {
                         HStack {
-                            Image(systemName: "ellipsis")
-                            Text("Show More")
+                            Text("Show More Sessions")
                                 .font(.subheadline.weight(.medium))
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.tertiary)
                         }
-                        .foregroundStyle(.accentColor)
+                        .foregroundStyle(.primary)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1002,11 +990,36 @@ private struct SessionFolderGroup: Hashable, Identifiable {
     }
 }
 
+private struct FolderHeaderCard: View {
+    let displayName: String
+    let path: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var shouldShowPath: Bool {
+        !path.isEmpty && displayName != path
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "folder")
+                    .foregroundStyle(Color.secondary)
+                Text(displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct SessionRow: View {
     let title: String
     let lastMessage: String?
     let cwd: String?
     let isActive: Bool
+    var showCwd: Bool = true
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -1030,7 +1043,7 @@ private struct SessionRow: View {
                         .truncationMode(.tail)
                 }
                 
-                if let cwd = cwd {
+                if showCwd, let cwd = cwd {
                     HStack(spacing: 4) {
                         Image(systemName: "folder")
                             .font(.caption2)
@@ -1284,48 +1297,37 @@ private struct FolderSessionsView: View {
             .map { SessionDisplay(summary: $0, isActive: $0.id == activeId) }
     }
 
+    private var groupedSessionsInFolder: [(group: SessionTimeGroup, sessions: [SessionDisplay])] {
+        var buckets: [SessionTimeGroup: [SessionDisplay]] = [:]
+
+        for session in sessionsInFolder {
+            let group = SessionTimeGroup.group(for: session.summary.updatedAt)
+            buckets[group, default: []].append(session)
+        }
+
+        return SessionTimeGroup.displayOrder.compactMap { group in
+            guard let sessions = buckets[group] else { return nil }
+            let sorted = sessions.sorted { lhs, rhs in
+                switch (lhs.summary.updatedAt, rhs.summary.updatedAt) {
+                case let (l?, r?):
+                    if l != r { return l > r }
+                    return lhs.summary.id < rhs.summary.id
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil): return lhs.summary.id < rhs.summary.id
+                }
+            }
+            return (group, sorted)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                if !folderPath.isEmpty {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder.fill")
-                            .foregroundStyle(.secondary)
-                        Text(folderPath)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .truncationMode(.middle)
-                    }
-                    .padding(.horizontal, 16)
-                }
+                FolderHeaderCard(displayName: folderDisplayName, path: folderPath)
+                .padding(.horizontal, 16)
 
-                let sessions = sessionsInFolder
-                if sessions.isEmpty {
-                    ContentUnavailableView(
-                        "No Sessions",
-                        systemImage: "tray",
-                        description: Text("No sessions found in this folder.")
-                    )
-                } else {
-                    VStack(spacing: 12) {
-                        ForEach(sessions) { session in
-                            let summary = session.summary
-                            NavigationLink(value: NavigationDestination.session(summary.id)) {
-                                SessionRow(
-                                    title: summary.title ?? "New Chat",
-                                    lastMessage: model.selectedServerId.flatMap {
-                                        model.getLastMessagePreview(for: $0, sessionId: summary.id)
-                                    },
-                                    cwd: summary.cwd,
-                                    isActive: session.isActive
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
+                folderSessionsContent
             }
             .padding(.vertical, 8)
         }
@@ -1334,6 +1336,57 @@ private struct FolderSessionsView: View {
         .searchable(text: $searchText, prompt: "Search sessions")
         .textInputAutocapitalization(.never)
         .disableAutocorrection(true)
+    }
+
+    @ViewBuilder
+    private var folderSessionsContent: some View {
+        let grouped = groupedSessionsInFolder
+        if grouped.isEmpty {
+            ContentUnavailableView(
+                "No Sessions",
+                systemImage: "tray",
+                description: Text("No sessions found in this folder.")
+            )
+            .padding(.horizontal, 16)
+        } else {
+            VStack(alignment: .leading, spacing: 20) {
+                ForEach(grouped, id: \.group) { entry in
+                    folderTimeSection(group: entry.group, sessions: entry.sessions)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func folderTimeSection(group: SessionTimeGroup, sessions: [SessionDisplay]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(group.title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+
+            VStack(spacing: 12) {
+                ForEach(sessions, id: \.id) { session in
+                    folderSessionRow(session)
+                }
+            }
+        }
+    }
+
+    private func folderSessionRow(_ session: SessionDisplay) -> some View {
+        let summary = session.summary
+        return NavigationLink(value: NavigationDestination.session(summary.id)) {
+            SessionRow(
+                title: summary.title ?? "New Chat",
+                lastMessage: model.selectedServerId.flatMap {
+                    model.getLastMessagePreview(for: $0, sessionId: summary.id)
+                },
+                cwd: summary.cwd,
+                isActive: session.isActive,
+                showCwd: false
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
