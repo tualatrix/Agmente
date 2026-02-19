@@ -143,6 +143,37 @@ final class CodexServerViewModelTests: XCTestCase {
         XCTAssertFalse(codexVM?.isPendingSession ?? true, "Codex should never have pending sessions")
     }
 
+    func testCodexServerViewModel_DefaultPermissionPreset() {
+        let model = makeModel()
+        addServer(to: model)
+        let service = makeService()
+
+        let initRequest = ACP.AnyRequest(id: .int(1), method: "initialize", params: nil)
+        model.acpService(service, willSend: initRequest)
+        let result: ACP.Value = .object([
+            "userAgent": .string("codex/1.0.0"),
+        ])
+        model.acpService(service, didReceiveMessage: .response(ACP.AnyResponse(id: .int(1), result: result)))
+
+        guard let codexVM = model.selectedCodexServerViewModel else {
+            XCTFail("Expected CodexServerViewModel")
+            return
+        }
+
+        XCTAssertEqual(codexVM.permissionPreset, .defaultPermissions)
+        XCTAssertEqual(codexVM.permissionPreset.displayName, "Default permissions")
+        XCTAssertEqual(codexVM.permissionPreset.turnApprovalPolicy, "on-request")
+        XCTAssertEqual(codexVM.permissionPreset.turnSandboxPolicy, .object(["type": .string("workspaceWrite")]))
+    }
+
+    func testCodexPermissionPreset_FullAccessMapsToDangerousTurnOverrides() {
+        let preset = CodexServerViewModel.PermissionPreset.fullAccess
+
+        XCTAssertEqual(preset.displayName, "Full access")
+        XCTAssertEqual(preset.turnApprovalPolicy, "never")
+        XCTAssertEqual(preset.turnSandboxPolicy, .object(["type": .string("dangerFullAccess")]))
+    }
+
     /// Test that selectedServerViewModelAny works for both ViewModel types.
     func testSelectedServerViewModelAny_WorksForBothTypes() {
         let model = makeModel()

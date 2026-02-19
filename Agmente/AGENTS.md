@@ -23,6 +23,9 @@ SwiftUI app layer and protocol routing logic:
 - Use `persistExtendedHistory: true` on `thread/start` and `thread/resume` so cold app relaunch can recover richer tool-call history from rollout-backed reads.
 - Plan mode output must map to `.plan` assistant segments from Codex notifications (`item/plan/delta`, `turn/plan/updated`) and from completed assistant message payloads containing `<proposed_plan>...</proposed_plan>`.
 - For plan streaming, prefer typed app-server notifications (for example `item/plan/delta`) over mirrored raw `codex/event/*` notifications to avoid duplicate rendering.
+- Codex permissions selector maps to `turn/start` overrides on every turn:
+  - `Default permissions` => `approvalPolicy: "on-request"` + `sandboxPolicy.type: "workspaceWrite"`
+  - `Full access` => `approvalPolicy: "never"` + `sandboxPolicy.type: "dangerFullAccess"` (dangerous/high-risk mode)
 
 ## Change Impact Rules
 - Protocol detection changes must validate both first-connect and reconnect behavior.

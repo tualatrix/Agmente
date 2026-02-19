@@ -97,6 +97,44 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
     @Published private(set) var availableSkills: [AppServerSkill] = []
     @Published var enabledSkillNames: Set<String> = []
 
+    // MARK: - Permissions Selection (Codex-specific)
+
+    enum PermissionPreset: String, CaseIterable, Identifiable {
+        case defaultPermissions
+        case fullAccess
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .defaultPermissions:
+                return "Default permissions"
+            case .fullAccess:
+                return "Full access"
+            }
+        }
+
+        var turnApprovalPolicy: String {
+            switch self {
+            case .defaultPermissions:
+                return "on-request"
+            case .fullAccess:
+                return "never"
+            }
+        }
+
+        var turnSandboxPolicy: JSONValue {
+            switch self {
+            case .defaultPermissions:
+                return .object(["type": .string("workspaceWrite")])
+            case .fullAccess:
+                return .object(["type": .string("dangerFullAccess")])
+            }
+        }
+    }
+
+    @Published var permissionPreset: PermissionPreset = .defaultPermissions
+
     // MARK: - Plan Mode (Codex-specific)
 
     @Published var isPlanModeEnabled: Bool = false
@@ -1482,7 +1520,9 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                     model: selectedModelId,
                     effort: selectedEffort,
                     skills: skillNames,
-                    isPlanMode: isPlanModeEnabled
+                    isPlanMode: isPlanModeEnabled,
+                    approvalPolicy: permissionPreset.turnApprovalPolicy,
+                    sandboxPolicy: permissionPreset.turnSandboxPolicy
                 )
                 bumpSessionTimestamp(sessionId: sessionId)
                 updateSessionTitleIfNeeded(with: prompt)
@@ -2014,7 +2054,9 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
         model: String?,
         effort: String?,
         skills: [String]?,
-        isPlanMode: Bool = false
+        isPlanMode: Bool = false,
+        approvalPolicy: String? = nil,
+        sandboxPolicy: JSONValue? = nil
     ) async throws {
         let input: JSONValue = .array([
             .object([
@@ -2030,6 +2072,12 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
         if let effort { params["effort"] = .string(effort) }
         if let skills, !skills.isEmpty {
             params["skills"] = .array(skills.map { .string($0) })
+        }
+        if let approvalPolicy {
+            params["approvalPolicy"] = .string(approvalPolicy)
+        }
+        if let sandboxPolicy {
+            params["sandboxPolicy"] = sandboxPolicy
         }
         if isPlanMode {
             var settings: [String: JSONValue] = [:]
