@@ -16,6 +16,7 @@ struct CodexSessionDetailView: View {
     @State private var expandedThoughts: Set<UUID> = []
     @State private var fileChangesReviewPayload: FileChangesReviewPayload?
     @State private var showUndoUnavailableAlert = false
+    @State private var transcriptState = ChatTranscriptState()
     @State private var scrollViewHeight: CGFloat = 0
     @State private var isAtBottom = true
     @State private var composerHeight: CGFloat = 0
@@ -65,7 +66,13 @@ struct CodexSessionDetailView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
-                chatTranscript
+                Group {
+                    if model.useHighPerformanceChatRenderer {
+                        highPerformanceChatTranscript
+                    } else {
+                        chatTranscript
+                    }
+                }
                     .frame(maxHeight: .infinity)
 
                 composer
@@ -86,14 +93,19 @@ struct CodexSessionDetailView: View {
         .overlay(alignment: .bottomTrailing) {
             if shouldShowScrollToBottomButton {
                 Button {
-                    if #available(iOS 17.0, *) {
-                        if let lastId = sessionViewModel.chatMessages.last?.id {
-                            scrollPosition = lastId
+                    if model.useHighPerformanceChatRenderer {
+                        transcriptState.scrollToBottom(animated: true)
+                        transcriptState.isAtBottom = true
+                    } else {
+                        if #available(iOS 17.0, *) {
+                            if let lastId = sessionViewModel.chatMessages.last?.id {
+                                scrollPosition = lastId
+                                isAtBottom = true
+                            }
+                        } else {
+                            scrollToBottomAction?()
                             isAtBottom = true
                         }
-                    } else {
-                        scrollToBottomAction?()
-                        isAtBottom = true
                     }
                 } label: {
                     if #available(iOS 26, *) {
@@ -294,6 +306,53 @@ private extension CodexSessionDetailView {
 
     private var shouldShowScrollToBottomButton: Bool {
         !isAtBottom && !sessionViewModel.chatMessages.isEmpty
+    }
+
+    var highPerformanceChatTranscript: some View {
+        ChatTranscriptContainerView(
+            state: transcriptState,
+            messages: sessionViewModel.chatMessages,
+            contentInsets: .zero,
+            actionHandlers: ChatEntryActionHandlers(
+                onACPPermissionResponse: { requestId, optionId in
+                    model.sendPermissionResponse(requestId: requestId, optionId: optionId)
+                },
+                onJSONRPCPermissionResponse: { requestId, optionId in
+                    model.sendPermissionResponse(requestId: requestId, optionId: optionId)
+                },
+                onApproveRequest: { requestId, acceptForSession in
+                    serverViewModel.approveRequest(requestId: requestId, acceptForSession: acceptForSession)
+                },
+                onDeclineRequest: { requestId in
+                    serverViewModel.declineRequest(requestId: requestId)
+                },
+                onUndoFileChanges: {
+                    showUndoUnavailableAlert = true
+                },
+                onReviewFileChanges: { items in
+                    guard !items.isEmpty else { return }
+                    fileChangesReviewPayload = FileChangesReviewPayload(items: items)
+                }
+            ),
+            onAtBottomChanged: { value in
+                isAtBottom = value
+            }
+        )
+        .overlay(alignment: .top) {
+            if sessionViewModel.chatMessages.isEmpty {
+                VStack(spacing: 12) {
+                    PixelBot()
+                    Text("let's git together and code")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 60)
+            }
+        }
+        .onAppear {
+            transcriptState.isAtBottom = true
+            isAtBottom = true
+        }
     }
 
     var composer: some View {

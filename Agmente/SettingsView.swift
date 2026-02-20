@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Binding var devModeEnabled: Bool
     @Binding var codexSessionLoggingEnabled: Bool
+    @Binding var useHighPerformanceChatRenderer: Bool
 
     var body: some View {
         NavigationStack {
@@ -30,6 +31,13 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+
+                Section("Chat Rendering") {
+                    Toggle("Use high-performance chat list", isOn: $useHighPerformanceChatRenderer)
+                    Text("Uses ListViewKit + MarkdownView renderer. Turn off to use the legacy SwiftUI transcript for A/B testing.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -48,5 +56,9 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(devModeEnabled: .constant(true), codexSessionLoggingEnabled: .constant(false))
+    SettingsView(
+        devModeEnabled: .constant(true),
+        codexSessionLoggingEnabled: .constant(false),
+        useHighPerformanceChatRenderer: .constant(true)
+    )
 }

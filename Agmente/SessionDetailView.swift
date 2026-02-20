@@ -20,6 +20,7 @@ struct SessionDetailView: View {
     @State private var showFileChangesReview = false
     @State private var fileChangesForReview: [FileChangeSummaryItem] = []
     @State private var showUndoUnavailableAlert = false
+    @State private var transcriptState = ChatTranscriptState()
     @State private var scrollViewHeight: CGFloat = 0
     @State private var isAtBottom = true
     @State private var composerHeight: CGFloat = 0
@@ -64,7 +65,13 @@ struct SessionDetailView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
-                chatTranscript
+                Group {
+                    if model.useHighPerformanceChatRenderer {
+                        highPerformanceChatTranscript
+                    } else {
+                        chatTranscript
+                    }
+                }
                     .frame(maxHeight: .infinity)
 
                 composer
@@ -85,14 +92,19 @@ struct SessionDetailView: View {
         .overlay(alignment: .bottomTrailing) {
             if shouldShowScrollToBottomButton {
                 Button {
-                    if #available(iOS 17.0, *) {
-                        if let lastId = sessionViewModel.chatMessages.last?.id {
-                            scrollPosition = lastId
+                    if model.useHighPerformanceChatRenderer {
+                        transcriptState.scrollToBottom(animated: true)
+                        transcriptState.isAtBottom = true
+                    } else {
+                        if #available(iOS 17.0, *) {
+                            if let lastId = sessionViewModel.chatMessages.last?.id {
+                                scrollPosition = lastId
+                                isAtBottom = true
+                            }
+                        } else {
+                            scrollToBottomAction?()
                             isAtBottom = true
                         }
-                    } else {
-                        scrollToBottomAction?()
-                        isAtBottom = true
                     }
                 } label: {
                     if #available(iOS 26, *) {
@@ -273,6 +285,53 @@ private extension SessionDetailView {
 
     private var shouldShowScrollToBottomButton: Bool {
         !isAtBottom && !sessionViewModel.chatMessages.isEmpty
+    }
+
+    var highPerformanceChatTranscript: some View {
+        ChatTranscriptContainerView(
+            state: transcriptState,
+            messages: sessionViewModel.chatMessages,
+            contentInsets: .zero,
+            actionHandlers: ChatEntryActionHandlers(
+                onACPPermissionResponse: { requestId, optionId in
+                    model.sendPermissionResponse(requestId: requestId, optionId: optionId)
+                },
+                onJSONRPCPermissionResponse: nil,
+                onApproveRequest: nil,
+                onDeclineRequest: nil,
+                onUndoFileChanges: {
+                    showUndoUnavailableAlert = true
+                },
+                onReviewFileChanges: { items in
+                    guard !items.isEmpty else { return }
+                    fileChangesForReview = items
+                    showFileChangesReview = true
+                }
+            ),
+            onAtBottomChanged: { value in
+                isAtBottom = value
+            }
+        )
+        .overlay(alignment: .top) {
+            if sessionViewModel.chatMessages.isEmpty {
+                if serverViewModel.pendingSessionLoad == serverViewModel.sessionId {
+                    ProgressView("Loading session...")
+                        .padding(.top, 60)
+                } else {
+                    VStack(spacing: 12) {
+                        PixelBot()
+                        Text("let's git together and code")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 60)
+                }
+            }
+        }
+        .onAppear {
+            transcriptState.isAtBottom = true
+            isAtBottom = true
+        }
     }
 
     var composer: some View {
