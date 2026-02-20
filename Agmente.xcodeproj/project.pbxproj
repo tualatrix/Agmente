@@ -11,6 +11,8 @@
 		4B98A0C62EFD012800FFF21E /* AppServerClient in Frameworks */ = {isa = PBXBuildFile; productRef = 4B98A0C52EFD012800FFF21E /* AppServerClient */; };
 		4BF9CAC72EF39606006464B5 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		4BF9CAC82EF39606006464B5 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		4C7A10052F10000100A11111 /* ListViewKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4C7A10032F10000100A11111 /* ListViewKit */; };
+		4C7A10062F10000100A11111 /* MarkdownView in Frameworks */ = {isa = PBXBuildFile; productRef = 4C7A10042F10000100A11111 /* MarkdownView */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +77,8 @@
 			files = (
 				4B0ED1DD2EDA23BA000D949E /* ACPClient in Frameworks */,
 				4B98A0C62EFD012800FFF21E /* AppServerClient in Frameworks */,
+				4C7A10052F10000100A11111 /* ListViewKit in Frameworks */,
+				4C7A10062F10000100A11111 /* MarkdownView in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -140,6 +144,8 @@
 			packageProductDependencies = (
 				4B0ED1DC2EDA23BA000D949E /* ACPClient */,
 				4B98A0C52EFD012800FFF21E /* AppServerClient */,
+				4C7A10032F10000100A11111 /* ListViewKit */,
+				4C7A10042F10000100A11111 /* MarkdownView */,
 			);
 			productName = Agmente;
 			productReference = 4B0ED1A92EDA2237000D949E /* Agmente.app */;
@@ -226,6 +232,8 @@
 			packageReferences = (
 				4B0ED1DB2EDA23BA000D949E /* XCLocalSwiftPackageReference "ACPClient" */,
 				4B98A0C42EFD012800FFF21E /* XCLocalSwiftPackageReference "AppServerClient" */,
+				4C7A10012F10000100A11111 /* XCRemoteSwiftPackageReference "ListViewKit" */,
+				4C7A10022F10000100A11111 /* XCRemoteSwiftPackageReference "MarkdownView" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4B0ED1AA2EDA2237000D949E /* Products */;
@@ -612,6 +620,25 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		4C7A10012F10000100A11111 /* XCRemoteSwiftPackageReference "ListViewKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Lakr233/ListViewKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.8;
+			};
+		};
+		4C7A10022F10000100A11111 /* XCRemoteSwiftPackageReference "MarkdownView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Lakr233/MarkdownView";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.6.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4B0ED1DC2EDA23BA000D949E /* ACPClient */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -620,6 +647,16 @@
 		4B98A0C52EFD012800FFF21E /* AppServerClient */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppServerClient;
+		};
+		4C7A10032F10000100A11111 /* ListViewKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4C7A10012F10000100A11111 /* XCRemoteSwiftPackageReference "ListViewKit" */;
+			productName = ListViewKit;
+		};
+		4C7A10042F10000100A11111 /* MarkdownView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4C7A10022F10000100A11111 /* XCRemoteSwiftPackageReference "MarkdownView" */;
+			productName = MarkdownView;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
