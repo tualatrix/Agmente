@@ -822,9 +822,16 @@ private struct SessionListPage: View {
         hasMore: Bool
     ) -> some View {
         let defaultCwd = model.defaultWorkingDirectory
+        let folderWorkingDirectory = group.path.isEmpty ? nil : group.path
 
         return VStack(alignment: .leading, spacing: 12) {
-            FolderHeaderCard(displayName: group.displayName, path: group.path)
+            FolderHeaderCard(
+                displayName: group.displayName,
+                path: group.path,
+                onAddSession: {
+                    model.sendNewSession(workingDirectory: folderWorkingDirectory)
+                }
+            )
 
             VStack(spacing: 12) {
                 ForEach(sessions, id: \.id) { session in
@@ -1000,6 +1007,7 @@ private struct SessionFolderGroup: Hashable, Identifiable {
 private struct FolderHeaderCard: View {
     let displayName: String
     let path: String
+    var onAddSession: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
 
     private var shouldShowPath: Bool {
@@ -1015,6 +1023,17 @@ private struct FolderHeaderCard: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                Spacer(minLength: 8)
+                if let onAddSession {
+                    Button(action: onAddSession) {
+                        Image(systemName: "plus")
+                            .font(.footnote.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityLabel(path.isEmpty ? "Start new session in default folder" : "Start new session in \(displayName)")
+                    .accessibilityIdentifier(path.isEmpty ? "newSessionInFolder_default" : "newSessionInFolder_\(path)")
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
