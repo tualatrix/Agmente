@@ -6,6 +6,10 @@ SwiftUI app layer and protocol routing logic:
 - Session/thread UI state
 - ACP vs Codex view model selection
 
+## External Repo Paths
+- For upstream ACP/Codex source checks, read `.agmente.paths` from repo root.
+- Use `AGMENTE_ACP_REPO` and `AGMENTE_CODEX_REPO` entries instead of machine-specific absolute paths.
+
 ## Architecture Model
 - The app has a single coordinator that owns per-server runtime state.
 - Each server runtime follows one protocol mode at a time (ACP or Codex).

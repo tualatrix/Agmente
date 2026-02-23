@@ -11,6 +11,11 @@ This file is the entrypoint for cloud/Claude coding agents. Use it with `Agents.
    - `AgmenteTests/AGENTS.md`
    - `AgmenteUITests/AGENTS.md`
 
+## Local Path Config
+- Use root `.agmente.paths` for machine-local external repo paths.
+- Required vars: `AGMENTE_ACP_REPO`, `AGMENTE_CODEX_REPO`.
+- Read this file when running upstream-spec/source checks.
+
 ## Core Architecture
 - Agmente supports two protocol modes: ACP and Codex app-server.
 - Protocol is detected after `initialize` and routed to protocol-specific view models.

@@ -3,6 +3,10 @@
 ## Scope
 Typed Codex app-server transport/service package used by the iOS app.
 
+## External Repo Paths
+- Read `.agmente.paths` (from repo root) before cross-checking Codex app-server upstream source.
+- Codex upstream reference root: `AGMENTE_CODEX_REPO/codex-rs`.
+
 ## Architecture Model
 - Transport and request orchestration are separated from protocol payload parsing.
 - Service APIs should remain typed and avoid leaking raw JSON-RPC details to callers.
@@ -35,7 +39,7 @@ Maintenance guardrails:
 - Keep `includeTurns: true` on read-based hydration paths.
 - Remember that `persistExtendedHistory` is not backfilled for old sessions.
 
-See `/Users/lvpeng/Code/Agmente-oss/AppServerClient/codex-thread-hydration.md` for the expanded maintenance checklist and regression scenarios.
+See `AppServerClient/codex-thread-hydration.md` for the expanded maintenance checklist and regression scenarios.
 
 ## Extension Pattern
 When adding app-server method support:

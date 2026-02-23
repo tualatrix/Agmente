@@ -3,6 +3,10 @@
 ## Scope
 Simulator-driven UI tests, including opt-in Codex local E2E.
 
+## External Repo Paths
+- Use root `.agmente.paths` for machine-local ACP/Codex checkout locations when debugging upstream compatibility.
+- Read it as the source of truth; do not hard-code local absolute paths.
+
 ## Coverage Goals
 - Add-server flows for ACP and Codex.
 - Connect/initialize/session lifecycle UX.
