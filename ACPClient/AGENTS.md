@@ -3,6 +3,10 @@
 ## Scope
 Typed ACP transport/service package used by the iOS app.
 
+## External Repo Paths
+- Read `.agmente.paths` (from repo root) before cross-checking ACP upstream docs/spec.
+- ACP upstream reference root: `AGMENTE_ACP_REPO/docs`.
+
 ## Architecture Model
 - Transport concerns, request orchestration, and ACP parsing are separated layers.
 - Public service APIs should remain typed and hide wire-format details from callers.

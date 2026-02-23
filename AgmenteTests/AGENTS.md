@@ -3,6 +3,10 @@
 ## Scope
 Unit/integration-style tests for app-layer view models and persistence.
 
+## External Repo Paths
+- If a test change requires checking ACP/Codex upstream behavior, read `.agmente.paths` from repo root.
+- Use `AGMENTE_ACP_REPO` and `AGMENTE_CODEX_REPO` for local external checkout paths.
+
 ## Test Layers
 - Protocol routing and view-model synchronization tests.
 - ACP-specific session behavior tests.

@@ -32,6 +32,14 @@
   - required tests,
   - compatibility constraints with ACP/Codex and any migration behavior.
 
+## Local External Repo Config
+- Create `.agmente.paths` from `.agmente.paths.example` only if it does not already exist; otherwise keep your existing file and update keys as needed.
+- `.agmente.paths` is local-only and gitignored.
+- Use `.agmente.paths` as the single local path registry for ACP/Codex upstream checkouts.
+- Required variables:
+  - `AGMENTE_ACP_REPO`: local `agent-client-protocol` checkout.
+  - `AGMENTE_CODEX_REPO`: local `codex` checkout (must contain `codex-rs`).
+
 ## What this app does
 - Connect to an Agent Client Protocol (ACP) server over WebSocket.
 - Connect to an OpenAI Codex app-server over WebSocket.
@@ -71,7 +79,8 @@
 # If codex is installed in PATH
 codex app-server --listen ws://127.0.0.1:8788
 
-# Or from Codex source checkout
+# Or from Codex source checkout (read `AGMENTE_CODEX_REPO` from `.agmente.paths`)
+cd <AGMENTE_CODEX_REPO>/codex-rs
 cargo run -p codex-cli -- app-server --listen ws://127.0.0.1:8788
 ```
 
@@ -258,6 +267,7 @@ You can get the simulator UUID from `xcrun simctl list devices` or from the `lis
 
 ## ACPClient reference
 - The iOS app uses the local `ACPClient` Swift package (`Agmente/ACPClient`) to speak ACP over WebSocket.
+- ACP protocol/spec upstream reference checkout: `AGMENTE_ACP_REPO/docs` (especially `AGMENTE_ACP_REPO/docs/protocol` and `AGMENTE_ACP_REPO/docs/schema`).
 - Key types: `ACPClientConfiguration` (endpoint, auth token provider, ping), `ACPClient` (connect/send), and delegate callbacks for state and messages.
 - RPC entry points used in the app: `initialize`, `session/new`, `session/prompt`, `session/cancel`, and optional `session/list`.
 - If you extend the client, keep new RPC methods consistent with ACP JSON-RPC envelopes and add handlers to `ACPViewModel`.
@@ -270,10 +280,10 @@ You can get the simulator UUID from `xcrun simctl list devices` or from the `lis
 ---
 
 ## Codex app-server reference (local source)
-- App-server implementation: `<codex-repo>/codex-rs/app-server`
-  - README for protocol flow and examples: `<codex-repo>/codex-rs/app-server/README.md`
-- Protocol types/schema: `<codex-repo>/codex-rs/app-server-protocol`
-  - v2 protocol definitions (Thread/Turn/Item): `<codex-repo>/codex-rs/app-server-protocol/src/protocol/v2.rs`
+- App-server implementation: `AGMENTE_CODEX_REPO/codex-rs/app-server`
+  - README for protocol flow and examples: `AGMENTE_CODEX_REPO/codex-rs/app-server/README.md`
+- Protocol types/schema: `AGMENTE_CODEX_REPO/codex-rs/app-server-protocol`
+  - v2 protocol definitions (Thread/Turn/Item): `AGMENTE_CODEX_REPO/codex-rs/app-server-protocol/src/protocol/v2.rs`
 - Schema generation (from installed Codex CLI):
   - `codex app-server generate-ts --out DIR`
   - `codex app-server generate-json-schema --out DIR`
