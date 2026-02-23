@@ -18,7 +18,7 @@ struct ContentView: View {
         NavigationStack(path: $navigationPath) {
             rootContent
                 .navigationTitle("")
-                .navigationBarTitleDisplayMode(.inline)
+                .applyInlineNavigationBarTitleDisplayMode()
                 .toolbar { toolbarContent }
                 .navigationDestination(for: NavigationDestination.self, destination: destinationView)
         }
@@ -116,7 +116,7 @@ private extension ContentView {
             SessionPlaceholderView(onAddServer: { showingAddServer = true })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
-                .background(Color(.systemGroupedBackground))
+                .background(Color.gray.opacity(0.10))
                 .ignoresSafeArea()
         } else {
             SessionListPage(model: model, navigationPath: $navigationPath)
@@ -240,6 +240,7 @@ private extension ContentView {
                 }
                 .accessibilityIdentifier("addServerMenuAction")
             } label: {
+                #if os(iOS)
                 if #available(iOS 26.0, *) {
                     HStack(spacing: 10) {
                         Circle()
@@ -270,10 +271,25 @@ private extension ContentView {
                     .padding()
                     .buttonStyle(.plain)
                 }
+                #else
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(model.connectionState == .connected ? Color.green : Color.orange)
+                        .frame(width: 9, height: 9)
+                    Text(model.currentServerName)
+                        .font(.headline.weight(.semibold))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .buttonStyle(.plain)
+                #endif
             }
         }
-        
-        ToolbarItem(placement: .navigationBarTrailing) {
+
+        ToolbarItem(placement: moreMenuPlacement) {
             Menu {
                 Button {
                     showingSettings = true
@@ -310,6 +326,14 @@ private extension ContentView {
             }
             .accessibilityIdentifier("moreMenuButton")
         }
+    }
+
+    private var moreMenuPlacement: ToolbarItemPlacement {
+#if os(macOS)
+        .automatic
+#else
+        .navigationBarTrailing
+#endif
     }
 }
 
@@ -417,11 +441,15 @@ private struct SessionListPage: View {
     }
 
     private var searchPlacement: SearchFieldPlacement {
+#if os(macOS)
+        return .toolbar
+#else
         if #available(iOS 26.0, *) {
             return .toolbar
         } else {
             return .navigationBarDrawer(displayMode: .automatic)
         }
+#endif
     }
 
     var body: some View {
@@ -467,19 +495,22 @@ private struct SessionListPage: View {
                 await model.refreshSessions()
             }
             
+#if os(iOS)
             if #available(iOS 26.0, *) {
-//                Spacer(minLength: 0)
+                // iOS 26 shows new-session action in bottom toolbar.
             } else {
                 footerActions
             }
+#else
+            footerActions
+#endif
         }
         .searchable(
             text: $sessionSearchText,
             placement: searchPlacement,
             prompt: "Search sessions"
         )
-        .textInputAutocapitalization(.never)
-        .disableAutocorrection(true)
+        .applyContentPlainTextInputBehavior()
         .sheet(isPresented: $showingNewSessionSheet) {
             NewSessionSheet(
                 workingDirectory: $customWorkingDirectory,
@@ -493,7 +524,7 @@ private struct SessionListPage: View {
         }
         .toolbar {
             if !model.serverSessionSummaries.isEmpty {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: groupingTogglePlacement) {
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             groupingMode = groupingMode.toggled
@@ -506,16 +537,16 @@ private struct SessionListPage: View {
                 }
             }
 
+#if os(iOS)
             if #available(iOS 26.0, *) {
                 DefaultToolbarItem(kind: .search, placement: .bottomBar)
 
-//                ToolbarSpacer(.flexible, placement: .bottomBar)
                 ToolbarItem(placement: .bottomBar) {
                     newSessionButton(expanded: true)
                         .padding(.horizontal, 4)
                 }
-//                ToolbarSpacer(.flexible, placement: .bottomBar)
             }
+#endif
         }
         .onAppear {
             if model.connectionState == .disconnected && !model.isConnecting {
@@ -563,12 +594,12 @@ private struct SessionListPage: View {
                                 summaryCardCollapsed.toggle()
                             }
                         } label: {
-                            Image(systemName: summaryCardCollapsed ? "chevron.down" : "chevron.up")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 28, height: 28)
-                                .background(Color(.systemGray5).opacity(0.6))
-                                .clipShape(Circle())
+                                Image(systemName: summaryCardCollapsed ? "chevron.down" : "chevron.up")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 28, height: 28)
+                                    .background(Color.gray.opacity(0.24))
+                                    .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -613,7 +644,7 @@ private struct SessionListPage: View {
 
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(Color(.systemGray4))
+                            .fill(Color.gray.opacity(0.45))
                             .frame(width: 8, height: 8)
                         Text("\(idle) idle")
                             .font(.caption.weight(.medium))
@@ -668,11 +699,15 @@ private struct SessionListPage: View {
 
     private func newSessionButton(expanded: Bool) -> some View {
         Group {
+#if os(iOS)
             if #available(iOS 26.0, *) {
                 newSessionButtonModern(expanded: expanded)
             } else {
                 newSessionButtonLegacy(expanded: expanded)
             }
+#else
+            newSessionButtonLegacy(expanded: expanded)
+#endif
         }
     }
 
@@ -869,6 +904,14 @@ private struct SessionListPage: View {
             }
         }
     }
+
+    private var groupingTogglePlacement: ToolbarItemPlacement {
+#if os(macOS)
+        .automatic
+#else
+        .navigationBarLeading
+#endif
+    }
 }
 
 private struct SessionDisplay: Identifiable {
@@ -1033,7 +1076,7 @@ private struct SessionRow: View {
         HStack(spacing: 14) {
             // Activity indicator
             Circle()
-                .fill(isActive ? healthyGreen : Color(.systemGray4))
+                .fill(isActive ? healthyGreen : Color.gray.opacity(0.45))
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -1083,12 +1126,12 @@ private struct SessionCardStyle: ViewModifier {
         content
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(colorScheme == .dark ? Color(.secondarySystemBackground) : Color.white)
+                    .fill(colorScheme == .dark ? Color.gray.opacity(0.16) : Color.white)
             )
             .shadow(color: Color.black.opacity(colorScheme == .dark ? 0 : 0.05), radius: 10, y: 6)
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color(.systemGray5).opacity(colorScheme == .dark ? 0.4 : 1), lineWidth: colorScheme == .dark ? 0.5 : 1)
+                    .stroke(Color.gray.opacity(colorScheme == .dark ? 0.30 : 0.20), lineWidth: colorScheme == .dark ? 0.5 : 1)
             )
     }
 }
@@ -1105,9 +1148,8 @@ private struct NewSessionSheet: View {
             Form {
                 Section {
                     TextField("Working directory", text: $workingDirectory)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                        .font(.body.monospaced())
+                        .applyContentPlainTextInputBehavior()
+                        .font(.system(.body, design: .monospaced))
                 } header: {
                     Text("Working Directory")
                 } footer: {
@@ -1126,7 +1168,7 @@ private struct NewSessionSheet: View {
                                     Image(systemName: "folder")
                                         .foregroundStyle(.secondary)
                                     Text(directory)
-                                        .font(.body.monospaced())
+                                        .font(.system(.body, design: .monospaced))
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                     Spacer()
@@ -1142,7 +1184,7 @@ private struct NewSessionSheet: View {
                 }
             }
             .navigationTitle("New Session")
-            .navigationBarTitleDisplayMode(.inline)
+            .applyInlineNavigationBarTitleDisplayMode()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
@@ -1153,7 +1195,9 @@ private struct NewSessionSheet: View {
                 }
             }
         }
+#if !os(macOS)
         .presentationDetents([.medium])
+#endif
     }
 }
 
@@ -1180,7 +1224,7 @@ private struct DeveloperLogsView: View {
                     .padding(.vertical, 12)
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color.gray.opacity(0.10))
             .onChange(of: model.updates) { _, newValue in
                 guard let last = newValue.last else { return }
                 withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -1192,8 +1236,8 @@ private struct DeveloperLogsView: View {
             }
         }
         .navigationTitle("Server Logs")
-        .navigationBarTitleDisplayMode(.inline)
-        .background(Color(.systemGroupedBackground))
+        .applyInlineNavigationBarTitleDisplayMode()
+        .background(Color.gray.opacity(0.10))
     }
 }
 
@@ -1253,11 +1297,11 @@ private struct DeveloperLogRow: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(colorScheme == .dark ? Color(.secondarySystemBackground) : Color.white)
+                .fill(colorScheme == .dark ? Color.gray.opacity(0.16) : Color.white)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color(.systemGray5).opacity(colorScheme == .dark ? 0.4 : 1), lineWidth: colorScheme == .dark ? 0.5 : 1)
+                .stroke(Color.gray.opacity(colorScheme == .dark ? 0.30 : 0.20), lineWidth: colorScheme == .dark ? 0.5 : 1)
         )
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0 : 0.04), radius: 8, y: 4)
     }
@@ -1339,10 +1383,9 @@ private struct FolderSessionsView: View {
             .padding(.vertical, 8)
         }
         .navigationTitle(folderDisplayName)
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationBarTitleDisplayMode()
         .searchable(text: $searchText, prompt: "Search sessions")
-        .textInputAutocapitalization(.never)
-        .disableAutocorrection(true)
+        .applyContentPlainTextInputBehavior()
     }
 
     @ViewBuilder
@@ -1406,6 +1449,26 @@ private enum NavigationDestination: Hashable {
 extension View {
     func sessionCardStyle() -> some View {
         self.modifier(SessionCardStyle())
+    }
+
+    @ViewBuilder
+    func applyInlineNavigationBarTitleDisplayMode() -> some View {
+#if os(macOS)
+        self
+#else
+        self.navigationBarTitleDisplayMode(.inline)
+#endif
+    }
+
+    @ViewBuilder
+    func applyContentPlainTextInputBehavior() -> some View {
+#if os(iOS)
+        self
+            .textInputAutocapitalization(.never)
+            .disableAutocorrection(true)
+#else
+        self
+#endif
     }
 }
 

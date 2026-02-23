@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import Foundation
 import MarkdownParser
 import MarkdownView
@@ -52,3 +53,4 @@ final class ChatMarkdownPackageCache {
         return package
     }
 }
+#endif

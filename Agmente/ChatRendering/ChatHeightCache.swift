@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import Foundation
 import CoreGraphics
 
@@ -37,3 +38,4 @@ final class ChatHeightCache {
         lock.unlock()
     }
 }
+#endif

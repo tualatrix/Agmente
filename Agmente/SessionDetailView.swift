@@ -1,5 +1,10 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 import PhotosUI
 import Photos
 import ACPClient
@@ -28,17 +33,25 @@ struct SessionDetailView: View {
     @State private var scrollPosition: UUID?
 
     private var textEditorHeight: CGFloat {
-        let uiFont = UIFont.preferredFont(forTextStyle: .body)
-        let sizingTextView = makeSizingTextView(font: uiFont)
-        let baseHeight = uiFont.lineHeight + sizingTextView.textContainerInset.top + sizingTextView.textContainerInset.bottom
+        let minHeight: CGFloat = 36
+        let maxHeight: CGFloat = 110
+        let lineHeight: CGFloat = 20
+        let verticalPadding: CGFloat = 16
+        let text = model.promptText.isEmpty ? " " : model.promptText
 
         guard textEditorWidth > 0 else {
-            return min(110, ceil(baseHeight))
+            return minHeight
         }
 
-        sizingTextView.text = model.promptText.isEmpty ? " " : model.promptText
-        let size = sizingTextView.sizeThatFits(CGSize(width: textEditorWidth, height: .greatestFiniteMagnitude))
-        return min(110, ceil(max(baseHeight, size.height)))
+        let usableWidth = max(1, textEditorWidth - 20)
+        let estimatedCharsPerLine = max(Int(usableWidth / 8), 1)
+        let estimatedLines = text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { partial, line in
+                partial + max(1, Int(ceil(Double(line.count) / Double(estimatedCharsPerLine))))
+            }
+        let estimatedHeight = CGFloat(estimatedLines) * lineHeight + verticalPadding
+        return min(maxHeight, max(minHeight, ceil(estimatedHeight)))
     }
 
     private var selectedCommand: SessionCommand? {
@@ -52,25 +65,22 @@ struct SessionDetailView: View {
         return "Message the agent…"
     }
 
-    private func makeSizingTextView(font: UIFont) -> UITextView {
-        let textView = UITextView()
-        textView.font = font
-        textView.isScrollEnabled = false
-        return textView
-    }
-
     var body: some View {
         ZStack {
-            Color(.systemGray6)
+            Color.gray.opacity(0.12)
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
                 Group {
+#if canImport(UIKit)
                     if model.useHighPerformanceChatRenderer {
                         highPerformanceChatTranscript
                     } else {
                         chatTranscript
                     }
+#else
+                    chatTranscript
+#endif
                 }
                     .frame(maxHeight: .infinity)
 
@@ -92,6 +102,7 @@ struct SessionDetailView: View {
         .overlay(alignment: .bottomTrailing) {
             if shouldShowScrollToBottomButton {
                 Button {
+#if canImport(UIKit)
                     if model.useHighPerformanceChatRenderer {
                         transcriptState.scrollToBottom(animated: true)
                         transcriptState.isAtBottom = true
@@ -106,7 +117,19 @@ struct SessionDetailView: View {
                             isAtBottom = true
                         }
                     }
+#else
+                    if #available(macOS 14.0, *) {
+                        if let lastId = sessionViewModel.chatMessages.last?.id {
+                            scrollPosition = lastId
+                            isAtBottom = true
+                        }
+                    } else {
+                        scrollToBottomAction?()
+                        isAtBottom = true
+                    }
+#endif
                 } label: {
+#if os(iOS)
                     if #available(iOS 26, *) {
                         Image(systemName: "arrow.down")
                             .font(.system(size: 14, weight: .semibold))
@@ -120,6 +143,13 @@ struct SessionDetailView: View {
                             .padding(10)
                             .background(.ultraThinMaterial, in: Circle())
                     }
+#else
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
+#endif
                 }
                 .padding(.trailing, 16)
                 .padding(.bottom, composerHeight + 24)
@@ -136,7 +166,7 @@ struct SessionDetailView: View {
         }
         .toolbar {
             if model.canDeleteSessionsLocally, !serverViewModel.sessionId.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: deleteMenuPlacement) {
                     Menu {
                         Button(role: .destructive) {
                             showDeleteSessionConfirm = true
@@ -287,6 +317,25 @@ private extension SessionDetailView {
         !isAtBottom && !sessionViewModel.chatMessages.isEmpty
     }
 
+    var deleteMenuPlacement: ToolbarItemPlacement {
+#if os(macOS)
+        .automatic
+#else
+        .topBarTrailing
+#endif
+    }
+
+    var textEditorWidthReader: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear { textEditorWidth = geo.size.width }
+                .onChange(of: geo.size.width) { _, newWidth in
+                    textEditorWidth = newWidth
+                }
+        }
+    }
+
+#if canImport(UIKit)
     var highPerformanceChatTranscript: some View {
         ChatTranscriptContainerView(
             state: transcriptState,
@@ -333,6 +382,7 @@ private extension SessionDetailView {
             isAtBottom = true
         }
     }
+#endif
 
     var composer: some View {
         let hasPrompt = !model.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -389,7 +439,7 @@ private extension SessionDetailView {
                     Image(systemName: "folder")
                         .font(.footnote.weight(.semibold))
                         .padding(8)
-                        .background(Color(.systemGray5))
+                        .background(Color.gray.opacity(0.20))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .foregroundStyle(model.currentSessionCwd.isEmpty ? .secondary : .primary)
                 }
@@ -420,22 +470,15 @@ private extension SessionDetailView {
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $model.promptText)
                         .focused($isTextEditorFocused)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
+                        .applyContentPlainTextInputBehavior()
                         .frame(minHeight: 36, maxHeight: textEditorHeight)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onAppear { textEditorWidth = geo.size.width }
-                                    .onChange(of: geo.size.width) { _, newWidth in
-                                        textEditorWidth = newWidth
-                                    }
-                            }
-                        )
+                        .background(textEditorWidthReader)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .font(.body)
+#if os(iOS)
                         .scrollContentBackground(.hidden)
+#endif
 
                     if model.promptText.isEmpty && sessionViewModel.attachedImages.isEmpty {
                         Text(promptPlaceholderText)
@@ -447,11 +490,11 @@ private extension SessionDetailView {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(.systemBackground))
+                        .fill(Color.white)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color(.systemGray4))
+                        .stroke(Color.gray.opacity(0.45))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -471,11 +514,11 @@ private extension SessionDetailView {
                         .frame(width: 44, height: 44)
                         .background(
                             Circle()
-                                .fill(isStreaming ? Color(.systemGray5) : (isConnected ? Color.black : Color.gray))
+                                .fill(isStreaming ? Color.gray.opacity(0.20) : (isConnected ? Color.black : Color.gray))
                         )
                         .overlay(
                             Circle()
-                                .stroke(Color(.systemGray3), lineWidth: isStreaming ? 1 : 0)
+                                .stroke(Color.gray.opacity(0.55), lineWidth: isStreaming ? 1 : 0)
                         )
                 }
                 .disabled(!(canSendPrompt || canCancelPrompt))
@@ -533,7 +576,7 @@ private extension SessionDetailView {
                 .font(.footnote.weight(.semibold))
                 .padding(8)
                 .background(
-                    Color(.systemGray5)
+                    Color.gray.opacity(0.20)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -575,7 +618,7 @@ private extension SessionDetailView {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
-        .background(Color(.systemGray6))
+        .background(Color.gray.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
@@ -602,7 +645,7 @@ private extension SessionDetailView {
             Image(systemName: "photo")
                 .font(.footnote.weight(.semibold))
                 .padding(8)
-                .background(supportsImages ? Color(.systemGray5) : Color(.systemGray6))
+                .background(supportsImages ? Color.gray.opacity(0.20) : Color.gray.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .foregroundStyle(supportsImages ? .primary : .quaternary)
         }
@@ -624,16 +667,16 @@ private extension SessionDetailView {
     var imageAttachmentPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(sessionViewModel.attachedImages) { attachment in
+                ForEach(sessionViewModel.attachedImages, id: \.id) { attachment in
                     ZStack(alignment: .topTrailing) {
-                        Image(uiImage: attachment.thumbnail())
+                        attachmentPreviewImage(for: attachment)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 60, height: 60)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color(.systemGray4), lineWidth: 1)
+                                    .stroke(Color.gray.opacity(0.45), lineWidth: 1)
                             )
                         
                         // Remove button
@@ -644,8 +687,8 @@ private extension SessionDetailView {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 18))
-                                .foregroundStyle(.white, Color(.systemGray))
-                                .background(Circle().fill(Color(.systemBackground)).padding(2))
+                                .foregroundStyle(.white, Color.gray.opacity(0.60))
+                                .background(Circle().fill(Color.white).padding(2))
                         }
                         .offset(x: 6, y: -6)
                     }
@@ -653,6 +696,14 @@ private extension SessionDetailView {
             }
             .padding(.vertical, 4)
         }
+    }
+
+    private func attachmentPreviewImage(for attachment: ImageAttachment) -> Image {
+#if canImport(UIKit)
+        Image(uiImage: attachment.thumbnail())
+#else
+        Image(nsImage: attachment.thumbnail())
+#endif
     }
     
     // MARK: - Photo Loading
@@ -663,7 +714,7 @@ private extension SessionDetailView {
             
             do {
                 if let data = try await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
+                   let image = PlatformImage(data: data) {
                     _ = await MainActor.run {
                         sessionViewModel.addImageAttachment(image)
                     }
@@ -749,7 +800,7 @@ private extension SessionDetailView {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
-                            .background(Color(.systemGray6))
+                            .background(Color.gray.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                 case .toolCall(let segment):
@@ -1117,7 +1168,7 @@ private extension SessionDetailView {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color(.systemGray6))
+        .background(Color.gray.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -1254,9 +1305,8 @@ struct WorkingDirectoryPickerSheet: View {
                 Section {
                     if model.isPendingSession {
                         TextField("Working directory", text: $pendingWorkingDirectory)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
-                            .font(.body.monospaced())
+                            .applyContentPlainTextInputBehavior()
+                            .font(.system(.body, design: .monospaced))
                     } else {
                         HStack {
                             Image(systemName: "folder.fill")
@@ -1331,7 +1381,7 @@ struct WorkingDirectoryPickerSheet: View {
                                         Image(systemName: "folder")
                                             .foregroundStyle(.secondary)
                                         Text(directory)
-                                            .font(.body.monospaced())
+                                            .font(.system(.body, design: .monospaced))
                                             .lineLimit(1)
                                             .truncationMode(.middle)
                                         Spacer()
@@ -1347,14 +1397,14 @@ struct WorkingDirectoryPickerSheet: View {
                                     Image(systemName: "folder")
                                         .foregroundStyle(.secondary)
                                     Text(directory)
-                                        .font(.body.monospaced())
+                                        .font(.system(.body, design: .monospaced))
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                     Spacer()
                                 }
                                 .contextMenu {
                                     Button("Copy") {
-                                        UIPasteboard.general.string = directory
+                                        copyToPasteboard(directory)
                                     }
                                 }
                             }
@@ -1367,7 +1417,7 @@ struct WorkingDirectoryPickerSheet: View {
                 }
             }
             .navigationTitle("Working Directory")
-            .navigationBarTitleDisplayMode(.inline)
+            .applyInlineNavigationBarTitleDisplayMode()
             .onAppear {
                 pendingWorkingDirectory = model.currentSessionCwd
             }
@@ -1382,5 +1432,14 @@ struct WorkingDirectoryPickerSheet: View {
                 }
             }
         }
+    }
+
+    private func copyToPasteboard(_ text: String) {
+#if canImport(UIKit)
+        UIPasteboard.general.string = text
+#elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+#endif
     }
 }

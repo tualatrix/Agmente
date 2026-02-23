@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import Foundation
 
 struct ChatEntry: Identifiable, Hashable {
@@ -197,3 +198,4 @@ struct ChatEntry: Identifiable, Hashable {
         )
     }
 }
+#endif

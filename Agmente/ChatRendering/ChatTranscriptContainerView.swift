@@ -1,4 +1,6 @@
+#if canImport(UIKit)
 import SwiftUI
+import UIKit
 import MarkdownView
 
 struct ChatTranscriptContainerView: UIViewRepresentable {
@@ -54,3 +56,4 @@ struct ChatTranscriptContainerView: UIViewRepresentable {
         state.listView = uiView
     }
 }
+#endif

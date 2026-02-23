@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 import ACPClient
 import enum AppServerClient.AppServerSkillScope
 
@@ -29,17 +31,25 @@ struct CodexSessionDetailView: View {
     }
 
     private var textEditorHeight: CGFloat {
-        let uiFont = UIFont.preferredFont(forTextStyle: .body)
-        let sizingTextView = makeSizingTextView(font: uiFont)
-        let baseHeight = uiFont.lineHeight + sizingTextView.textContainerInset.top + sizingTextView.textContainerInset.bottom
+        let minHeight: CGFloat = 36
+        let maxHeight: CGFloat = 110
+        let lineHeight: CGFloat = 20
+        let verticalPadding: CGFloat = 16
+        let text = model.promptText.isEmpty ? " " : model.promptText
 
         guard textEditorWidth > 0 else {
-            return min(110, ceil(baseHeight))
+            return minHeight
         }
 
-        sizingTextView.text = model.promptText.isEmpty ? " " : model.promptText
-        let size = sizingTextView.sizeThatFits(CGSize(width: textEditorWidth, height: .greatestFiniteMagnitude))
-        return min(110, ceil(max(baseHeight, size.height)))
+        let usableWidth = max(1, textEditorWidth - 20)
+        let estimatedCharsPerLine = max(Int(usableWidth / 8), 1)
+        let estimatedLines = text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { partial, line in
+                partial + max(1, Int(ceil(Double(line.count) / Double(estimatedCharsPerLine))))
+            }
+        let estimatedHeight = CGFloat(estimatedLines) * lineHeight + verticalPadding
+        return min(maxHeight, max(minHeight, ceil(estimatedHeight)))
     }
 
     private var selectedCommand: SessionCommand? {
@@ -53,25 +63,22 @@ struct CodexSessionDetailView: View {
         return "Message the agent…"
     }
 
-    private func makeSizingTextView(font: UIFont) -> UITextView {
-        let textView = UITextView()
-        textView.font = font
-        textView.isScrollEnabled = false
-        return textView
-    }
-
     var body: some View {
         ZStack {
-            Color(.systemGray6)
+            Color.gray.opacity(0.12)
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
                 Group {
+#if canImport(UIKit)
                     if model.useHighPerformanceChatRenderer {
                         highPerformanceChatTranscript
                     } else {
                         chatTranscript
                     }
+#else
+                    chatTranscript
+#endif
                 }
                     .frame(maxHeight: .infinity)
 
@@ -93,6 +100,7 @@ struct CodexSessionDetailView: View {
         .overlay(alignment: .bottomTrailing) {
             if shouldShowScrollToBottomButton {
                 Button {
+#if canImport(UIKit)
                     if model.useHighPerformanceChatRenderer {
                         transcriptState.scrollToBottom(animated: true)
                         transcriptState.isAtBottom = true
@@ -107,7 +115,19 @@ struct CodexSessionDetailView: View {
                             isAtBottom = true
                         }
                     }
+#else
+                    if #available(macOS 14.0, *) {
+                        if let lastId = sessionViewModel.chatMessages.last?.id {
+                            scrollPosition = lastId
+                            isAtBottom = true
+                        }
+                    } else {
+                        scrollToBottomAction?()
+                        isAtBottom = true
+                    }
+#endif
                 } label: {
+#if os(iOS)
                     if #available(iOS 26, *) {
                         Image(systemName: "arrow.down")
                             .font(.system(size: 14, weight: .semibold))
@@ -121,6 +141,13 @@ struct CodexSessionDetailView: View {
                             .padding(10)
                             .background(.ultraThinMaterial, in: Circle())
                     }
+#else
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
+#endif
                 }
                 .padding(.trailing, 16)
                 .padding(.bottom, composerHeight + 24)
@@ -139,7 +166,7 @@ struct CodexSessionDetailView: View {
         .toolbar {
             if !serverViewModel.sessionId.isEmpty,
                model.canArchiveSessions || model.canDeleteSessionsLocally {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: sessionMenuPlacement) {
                     Menu {
                         if model.canArchiveSessions {
                             Button(role: .destructive) {
@@ -308,6 +335,7 @@ private extension CodexSessionDetailView {
         !isAtBottom && !sessionViewModel.chatMessages.isEmpty
     }
 
+#if canImport(UIKit)
     var highPerformanceChatTranscript: some View {
         ChatTranscriptContainerView(
             state: transcriptState,
@@ -354,6 +382,7 @@ private extension CodexSessionDetailView {
             isAtBottom = true
         }
     }
+#endif
 
     var composer: some View {
         let hasPrompt = !model.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -390,7 +419,7 @@ private extension CodexSessionDetailView {
             .overlay {
                 HStack(spacing: 0) {
                     LinearGradient(
-                        colors: [Color(.systemGray6), Color(.systemGray6).opacity(0)],
+                        colors: [Color.gray.opacity(0.12), Color.gray.opacity(0)],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -399,7 +428,7 @@ private extension CodexSessionDetailView {
                     Spacer(minLength: 0)
 
                     LinearGradient(
-                        colors: [Color(.systemGray6).opacity(0), Color(.systemGray6)],
+                        colors: [Color.gray.opacity(0), Color.gray.opacity(0.12)],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -418,8 +447,7 @@ private extension CodexSessionDetailView {
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $model.promptText)
                         .focused($isTextEditorFocused)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
+                        .applyContentPlainTextInputBehavior()
                         .frame(minHeight: 36, maxHeight: textEditorHeight)
                         .background(
                             GeometryReader { geo in
@@ -433,7 +461,9 @@ private extension CodexSessionDetailView {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .font(.body)
+#if os(iOS)
                         .scrollContentBackground(.hidden)
+#endif
                         .accessibilityIdentifier("codexPromptEditor")
 
                     if model.promptText.isEmpty && sessionViewModel.attachedImages.isEmpty {
@@ -446,11 +476,11 @@ private extension CodexSessionDetailView {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(.systemBackground))
+                        .fill(Color.white)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color(.systemGray4))
+                        .stroke(Color.gray.opacity(0.45))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -470,11 +500,11 @@ private extension CodexSessionDetailView {
                         .frame(width: 44, height: 44)
                         .background(
                             Circle()
-                                .fill(isStreaming ? Color(.systemGray5) : (isConnected ? Color.black : Color.gray))
+                                .fill(isStreaming ? Color.gray.opacity(0.20) : (isConnected ? Color.black : Color.gray))
                         )
                         .overlay(
                             Circle()
-                                .stroke(Color(.systemGray3), lineWidth: isStreaming ? 1 : 0)
+                                .stroke(Color.gray.opacity(0.55), lineWidth: isStreaming ? 1 : 0)
                         )
                 }
                 .disabled(!canSendPrompt && !canCancelPrompt)
@@ -676,7 +706,7 @@ private extension CodexSessionDetailView {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(serverViewModel.enabledSkillNames.isEmpty ? Color(.systemGray5) : Color.purple.opacity(0.15))
+            .background(serverViewModel.enabledSkillNames.isEmpty ? Color.gray.opacity(0.20) : Color.purple.opacity(0.15))
             .foregroundStyle(serverViewModel.enabledSkillNames.isEmpty ? Color.secondary : Color.purple)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -734,7 +764,7 @@ private extension CodexSessionDetailView {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(serverViewModel.permissionPreset == .fullAccess ? Color.orange.opacity(0.18) : Color(.systemGray5))
+            .background(serverViewModel.permissionPreset == .fullAccess ? Color.orange.opacity(0.18) : Color.gray.opacity(0.20))
             .foregroundStyle(serverViewModel.permissionPreset == .fullAccess ? Color.orange : Color.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -754,7 +784,7 @@ private extension CodexSessionDetailView {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(serverViewModel.isPlanModeEnabled ? Color.blue.opacity(0.15) : Color(.systemGray5))
+            .background(serverViewModel.isPlanModeEnabled ? Color.blue.opacity(0.15) : Color.gray.opacity(0.20))
             .foregroundStyle(serverViewModel.isPlanModeEnabled ? Color.blue : Color.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -796,7 +826,7 @@ private extension CodexSessionDetailView {
             Image(systemName: "slash.circle")
                 .font(.footnote.weight(.semibold))
                 .padding(8)
-                .background(Color(.systemGray5))
+                .background(Color.gray.opacity(0.20))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .menuStyle(.borderlessButton)
@@ -836,7 +866,7 @@ private extension CodexSessionDetailView {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
-        .background(Color(.systemGray6))
+        .background(Color.gray.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
@@ -1039,7 +1069,7 @@ private extension CodexSessionDetailView {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(Color(.systemGray6))
+                    .background(Color.gray.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
@@ -1160,7 +1190,7 @@ private extension CodexSessionDetailView {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(Color(.systemGray6))
+                    .background(Color.gray.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
@@ -1274,5 +1304,13 @@ private extension CodexSessionDetailView {
         case .unknown:
             return .primary
         }
+    }
+
+    var sessionMenuPlacement: ToolbarItemPlacement {
+#if os(macOS)
+        .automatic
+#else
+        .topBarTrailing
+#endif
     }
 }

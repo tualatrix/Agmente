@@ -13,6 +13,13 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
     typealias SessionSummary = ACPClientSessionSummary
 
     private static let defaultScheme = "ws"
+    private static let supportsHighPerformanceChatRenderer: Bool = {
+#if canImport(UIKit)
+        true
+#else
+        false
+#endif
+    }()
 
     // Connection / selection
     @Published var scheme: String = "ws" {
@@ -55,7 +62,7 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
             }
         }
     }
-    @Published var useHighPerformanceChatRenderer: Bool = true {
+    @Published var useHighPerformanceChatRenderer: Bool = AppViewModel.supportsHighPerformanceChatRenderer {
         didSet { defaults.set(useHighPerformanceChatRenderer, forKey: highPerformanceRendererKey) }
     }
 
@@ -304,9 +311,9 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
         devModeEnabled = defaults.bool(forKey: devModeKey)
         codexSessionLoggingEnabled = defaults.bool(forKey: codexSessionLoggingKey)
         if defaults.object(forKey: highPerformanceRendererKey) == nil {
-            useHighPerformanceChatRenderer = true
+            useHighPerformanceChatRenderer = Self.supportsHighPerformanceChatRenderer
         } else {
-            useHighPerformanceChatRenderer = defaults.bool(forKey: highPerformanceRendererKey)
+            useHighPerformanceChatRenderer = Self.supportsHighPerformanceChatRenderer && defaults.bool(forKey: highPerformanceRendererKey)
         }
 
         // Phase 2: Create ServerViewModel instances for each server

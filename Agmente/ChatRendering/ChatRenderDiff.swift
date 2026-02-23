@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import Foundation
 
 struct ChatRenderDiff {
@@ -35,3 +36,4 @@ struct ChatRenderDiff {
         return ChatRenderDiff(inserted: inserted, removed: removed, updated: updated)
     }
 }
+#endif

@@ -92,23 +92,20 @@ struct AddServerView: View {
                         .accessibilityIdentifier("ProtocolPicker")
 
                         TextField("Host", text: $host)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
+                            .applyServerURLKeyboardType()
+                            .applyServerPlainTextInputBehavior()
                             .onChange(of: host, perform: normalizeHostInput)
                             .focused($focusedField, equals: .host)
                             .accessibilityIdentifier("HostField")
 
                         SecureField("Bearer token (optional)", text: $token)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
+                            .applyServerPlainTextInputBehavior()
                             .focused($focusedField, equals: .token)
                     }
 
                     Section {
                         TextField("Working directory", text: $workingDirectory)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
+                            .applyServerPlainTextInputBehavior()
                             .focused($focusedField, equals: .workingDirectory)
                     } footer: {
                         VStack(alignment: .leading, spacing: 8) {
@@ -132,13 +129,11 @@ struct AddServerView: View {
                     Section {
                         DisclosureGroup("Cloudflare Access", isExpanded: $showCloudflareAccess) {
                             TextField("Client ID", text: $cfAccessClientId)
-                                .textInputAutocapitalization(.never)
-                                .disableAutocorrection(true)
+                                .applyServerPlainTextInputBehavior()
                                 .focused($focusedField, equals: .cfAccessClientId)
 
                             SecureField("Client Secret", text: $cfAccessClientSecret)
-                                .textInputAutocapitalization(.never)
-                                .disableAutocorrection(true)
+                                .applyServerPlainTextInputBehavior()
                                 .focused($focusedField, equals: .cfAccessClientSecret)
                         }
                     }
@@ -466,7 +461,7 @@ private struct ServerSummaryOverlay: View {
                         .padding(12)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(.systemGray6))
+                                .fill(Color.gray.opacity(0.12))
                         )
                     }
                 }
@@ -494,5 +489,27 @@ private struct ServerSummaryOverlay: View {
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(radius: 18)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func applyServerPlainTextInputBehavior() -> some View {
+#if os(iOS)
+        self
+            .textInputAutocapitalization(.never)
+            .disableAutocorrection(true)
+#else
+        self
+#endif
+    }
+
+    @ViewBuilder
+    func applyServerURLKeyboardType() -> some View {
+#if os(iOS)
+        self.keyboardType(.URL)
+#else
+        self
+#endif
     }
 }

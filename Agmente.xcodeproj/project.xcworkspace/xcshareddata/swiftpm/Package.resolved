@@ -1,5 +1,5 @@
 {
-  "originHash" : "f078d9e11f260f69448616ae6b62baa9c540c884b1872c1464b578ead2c174c7",
+  "originHash" : "11c8e3d0dcc6eac7ca183f41b406c8af972a3f155d0810b4049881b9ae88b562",
   "pins" : [
     {
       "identity" : "acp-swift-sdk",
@@ -22,10 +22,10 @@
     {
       "identity" : "listviewkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Lakr233/ListViewKit",
+      "location" : "https://github.com/tualatrix/ListViewKit",
       "state" : {
-        "revision" : "5dea05a52a6c2c7bb013a5925c517d6e32940605",
-        "version" : "1.1.8"
+        "branch" : "main",
+        "revision" : "b2601161e0971e9e9e4678f2dbaea68b1a4a653d"
       }
     },
     {

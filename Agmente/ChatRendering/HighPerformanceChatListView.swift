@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 import ListViewKit
 import MarkdownView
@@ -305,6 +306,8 @@ final class HighPerformanceChatListView: UIView {
         return thoughtTheme
     }
 }
+
+extension HighPerformanceChatListView: ChatTranscriptScrollable {}
 
 extension HighPerformanceChatListView: UIScrollViewDelegate {
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -1845,3 +1848,4 @@ private extension UIFont {
         return UIFont(descriptor: descriptor, size: pointSize)
     }
 }
+#endif

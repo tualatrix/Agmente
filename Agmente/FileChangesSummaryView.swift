@@ -179,7 +179,7 @@ struct FileChangesSummaryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color(.systemGray5))
+        .background(Color.gray.opacity(0.20))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
@@ -192,7 +192,7 @@ struct FileChangesReviewSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ForEach(items) { item in
+                    ForEach(items, id: \.id) { item in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(item.path)
                                 .font(.subheadline.weight(.semibold))
@@ -210,7 +210,7 @@ struct FileChangesReviewSheet: View {
                                     .foregroundStyle(.primary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(10)
-                                    .background(Color(.systemGray6))
+                                    .background(Color.gray.opacity(0.12))
                                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             } else {
                                 Text("No diff provided.")
@@ -225,12 +225,20 @@ struct FileChangesReviewSheet: View {
             }
             .navigationTitle("File Changes")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: doneButtonPlacement) {
                     Button("Done") {
                         dismiss()
                     }
                 }
             }
         }
+    }
+
+    private var doneButtonPlacement: ToolbarItemPlacement {
+#if os(macOS)
+        .automatic
+#else
+        .topBarTrailing
+#endif
     }
 }

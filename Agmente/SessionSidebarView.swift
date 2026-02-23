@@ -33,27 +33,23 @@ private extension SessionSidebarView {
             .disabled(model.selectedServerId == nil)
 
             TextField("Host", text: $model.endpointHost)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
+                .applyPlainTextInputBehavior()
                 .textFieldStyle(.roundedBorder)
-                .keyboardType(.URL)
+                .applyURLKeyboardType()
                 .disabled(model.selectedServerId == nil)
 
             SecureField("Bearer token (optional)", text: $model.token)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
+                .applyPlainTextInputBehavior()
                 .textFieldStyle(.roundedBorder)
                 .disabled(model.selectedServerId == nil)
 
             TextField("CF Access Client ID (optional)", text: $model.cfAccessClientId)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
+                .applyPlainTextInputBehavior()
                 .textFieldStyle(.roundedBorder)
                 .disabled(model.selectedServerId == nil)
 
             SecureField("CF Access Client Secret (optional)", text: $model.cfAccessClientSecret)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
+                .applyPlainTextInputBehavior()
                 .textFieldStyle(.roundedBorder)
                 .disabled(model.selectedServerId == nil)
 
@@ -141,7 +137,7 @@ private extension SessionSidebarView {
 
             }
             .padding()
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.10)))
 
             if serverViewModel.sessionSummaries.isEmpty {
                 Text("Most ACP agents do not expose session/list; sessions are cached locally while this app is running.")
@@ -193,5 +189,27 @@ private extension SessionSidebarView {
             .frame(maxHeight: 220)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func applyPlainTextInputBehavior() -> some View {
+#if os(iOS)
+        self
+            .textInputAutocapitalization(.never)
+            .disableAutocorrection(true)
+#else
+        self
+#endif
+    }
+
+    @ViewBuilder
+    func applyURLKeyboardType() -> some View {
+#if os(iOS)
+        self.keyboardType(.URL)
+#else
+        self
+#endif
     }
 }

@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import Foundation
 
 struct ChatEntryMapper {
@@ -150,3 +151,4 @@ struct ChatEntryMapper {
         return ToolCallDisplay(toolCallId: nil, title: displayContent, kind: toolKind, status: status)
     }
 }
+#endif

@@ -1,4 +1,9 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 struct SettingsView: View {
     @Binding var devModeEnabled: Bool
@@ -33,14 +38,22 @@ struct SettingsView: View {
                 }
 
                 Section("Chat Rendering") {
+#if canImport(UIKit)
                     Toggle("Use high-performance chat list", isOn: $useHighPerformanceChatRenderer)
                     Text("Uses ListViewKit + MarkdownView renderer. Turn off to use the legacy SwiftUI transcript for A/B testing.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+#else
+                    Text("High-performance chat list is currently available on iOS only.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+#endif
                 }
             }
             .navigationTitle("Settings")
+#if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
+#endif
         }
     }
     
@@ -50,7 +63,11 @@ struct SettingsView: View {
         let urlString = "mailto:\(email)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
         
         if let url = URL(string: urlString) {
+#if canImport(UIKit)
             UIApplication.shared.open(url)
+#elseif canImport(AppKit)
+            NSWorkspace.shared.open(url)
+#endif
         }
     }
 }

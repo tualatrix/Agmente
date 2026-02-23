@@ -90,7 +90,7 @@ struct ProposedPlanCard: View {
                             .font(.footnote.weight(.medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(.systemGray5))
+                            .background(Color.gray.opacity(0.20))
                             .foregroundStyle(.secondary)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
@@ -144,7 +144,9 @@ struct UserInputQuestionsSheet: View {
                             .tag(index)
                     }
                 }
+#if os(iOS)
                 .tabViewStyle(.page(indexDisplayMode: .never))
+#endif
                 .animation(.easeInOut(duration: 0.25), value: currentPage)
 
                 // Bottom bar with navigation and submit
@@ -153,7 +155,7 @@ struct UserInputQuestionsSheet: View {
                     .padding(.bottom, 16)
             }
             .navigationTitle("Plan Mode Question")
-            .navigationBarTitleDisplayMode(.inline)
+            .applyInlineNavigationBarTitleDisplayMode()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Skip") {
@@ -174,7 +176,7 @@ struct UserInputQuestionsSheet: View {
         HStack(spacing: 6) {
             ForEach(0..<questions.count, id: \.self) { index in
                 Circle()
-                    .fill(index == currentPage ? Color.blue : Color(.systemGray4))
+                    .fill(index == currentPage ? Color.blue : Color.gray.opacity(0.45))
                     .frame(width: 7, height: 7)
                     .onTapGesture { currentPage = index }
             }
@@ -270,11 +272,11 @@ struct UserInputQuestionsSheet: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(isSelected ? Color.blue.opacity(0.08) : Color(.systemGray6))
+            .background(isSelected ? Color.blue.opacity(0.08) : Color.gray.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.blue.opacity(0.3) : Color(.systemGray4).opacity(0.5), lineWidth: 1)
+                    .stroke(isSelected ? Color.blue.opacity(0.3) : Color.gray.opacity(0.30), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -304,7 +306,7 @@ struct UserInputQuestionsSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color(.systemGray6))
+        .background(Color.gray.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
@@ -325,7 +327,7 @@ struct UserInputQuestionsSheet: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color(.systemGray5))
+                    .background(Color.gray.opacity(0.20))
                     .foregroundStyle(.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }

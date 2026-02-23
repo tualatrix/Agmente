@@ -7,7 +7,9 @@
 
 import Foundation
 import Network
+#if canImport(UIKit)
 import UIKit
+#endif
 
 class LocalNetworkPrivacy: NSObject {
     private let service: NetService
@@ -31,9 +33,11 @@ class LocalNetworkPrivacy: NSObject {
                 return
             }
 
+#if canImport(UIKit)
             guard UIApplication.shared.applicationState == .active else {
                 return
             }
+#endif
 
             if self.publishing {
                 self.timer?.invalidate()

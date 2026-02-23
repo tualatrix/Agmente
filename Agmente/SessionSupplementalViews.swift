@@ -313,7 +313,7 @@ struct ShimmeringBubble: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color(.systemGray6))
+        .background(Color.gray.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 }
@@ -335,7 +335,7 @@ struct SystemBubble: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color(.systemGray5))
+            .background(Color.gray.opacity(0.16))
             .clipShape(Capsule())
             Spacer()
         }
@@ -375,6 +375,14 @@ struct UserBubble: View {
         self.content = content
         self.images = images
     }
+
+    private func thumbnailImage(for image: PlatformImage) -> Image {
+#if canImport(UIKit)
+        Image(uiImage: image)
+#else
+        Image(nsImage: image)
+#endif
+    }
     
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -382,8 +390,8 @@ struct UserBubble: View {
             VStack(alignment: .trailing, spacing: 6) {
                 if !images.isEmpty {
                     HStack(spacing: 6) {
-                        ForEach(images) { imageData in
-                            Image(uiImage: imageData.thumbnail)
+                        ForEach(Array(images.enumerated()), id: \.element.id) { _, imageData in
+                            thumbnailImage(for: imageData.thumbnail)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 80, height: 80)
@@ -421,7 +429,7 @@ struct AssistantTextBubble: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Color(.systemGray6))
+                .background(Color.gray.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
@@ -475,7 +483,7 @@ struct SessionCard: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(.tertiarySystemBackground))
+                .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.gray.opacity(0.08))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)

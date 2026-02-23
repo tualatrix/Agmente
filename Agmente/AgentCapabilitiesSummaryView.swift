@@ -99,7 +99,7 @@ struct AgentCapabilitiesSummary: View {
                         .padding(.vertical, 4)
                         .background(
                             Capsule()
-                                .fill(Color(.systemGray5))
+                                .fill(Color.gray.opacity(0.16))
                         )
                         .foregroundStyle(.secondary)
                     }
@@ -126,7 +126,7 @@ struct AgentCapabilitiesSummary: View {
                         .padding(10)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color(.systemGray6))
+                                .fill(Color.gray.opacity(0.12))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)

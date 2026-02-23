@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 import ACPClient
 import ACP
 
@@ -119,7 +118,7 @@ final class ACPSessionViewModel: ObservableObject {
     }
 
     @discardableResult
-    func addImageAttachment(_ image: UIImage) -> Bool {
+    func addImageAttachment(_ image: PlatformImage) -> Bool {
         guard canAttachMoreImages else {
             dependencies.append("Cannot attach more images (limit: \(ImageProcessor.maxAttachments))")
             return false

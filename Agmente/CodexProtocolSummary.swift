@@ -20,7 +20,7 @@ struct CodexProtocolSummary: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(.systemGray6))
+                    .fill(Color.gray.opacity(0.12))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -44,7 +44,7 @@ struct CodexProtocolSummary: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(.systemGray6))
+                    .fill(Color.gray.opacity(0.12))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
