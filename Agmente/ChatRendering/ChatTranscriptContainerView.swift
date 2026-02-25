@@ -46,11 +46,32 @@ struct ChatTranscriptContainerView: UIViewRepresentable {
             context.coordinator.lastInsets = contentInsets
         }
         if !context.coordinator.hasRendered || context.coordinator.lastMessages != messages {
+            let shouldAnimateScrollToBottom = shouldAnimateScrollToBottom(
+                from: context.coordinator.lastMessages,
+                to: messages,
+                hasRendered: context.coordinator.hasRendered
+            )
             // Keep row diff updates non-animated to avoid alpha flicker under frequent updates.
-            uiView.render(messages: messages, animated: false)
+            uiView.render(
+                messages: messages,
+                animated: false,
+                scrollToBottomAnimated: shouldAnimateScrollToBottom
+            )
             context.coordinator.lastMessages = messages
             context.coordinator.hasRendered = true
         }
         state.listView = uiView
+    }
+
+    private func shouldAnimateScrollToBottom(
+        from oldMessages: [ChatMessage],
+        to newMessages: [ChatMessage],
+        hasRendered: Bool
+    ) -> Bool {
+        ChatScrollAnimationPolicy.shouldAnimateScrollToBottom(
+            from: oldMessages,
+            to: newMessages,
+            hasRendered: hasRendered
+        )
     }
 }

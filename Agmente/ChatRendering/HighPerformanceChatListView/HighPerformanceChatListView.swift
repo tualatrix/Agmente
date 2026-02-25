@@ -79,6 +79,7 @@ final class HighPerformanceChatListView: UIView {
     private var renderedEntries: [ChatEntry] = []
     private var pendingEntries: [ChatEntry]?
     private var pendingEntriesAnimated: Bool = false
+    private var pendingScrollToBottomAnimated: Bool = false
     private var expandedThoughtEntryIds: Set<String> = []
     private var isAutoScrollingToBottom = true
     private var autoScrollTolerance: CGFloat = 4
@@ -138,7 +139,12 @@ final class HighPerformanceChatListView: UIView {
         listView.scrollIndicatorInsets = insets
     }
 
-    func render(messages: [ChatMessage], animated: Bool = true) {
+    func render(
+        messages: [ChatMessage],
+        animated: Bool = true,
+        scrollToBottomAnimated: Bool? = nil
+    ) {
+        let scrollToBottomAnimated = scrollToBottomAnimated ?? animated
         let theme = self.theme
         let thoughtTheme = Self.makeThoughtMarkdownTheme(from: theme)
         updateQueue.async { [weak self] in
@@ -161,7 +167,11 @@ final class HighPerformanceChatListView: UIView {
                     self.flushPendingEntriesIfPossible()
                     return
                 }
-                self.applyEntries(visibleEntries, animated: animated)
+                self.applyEntries(
+                    visibleEntries,
+                    animated: animated,
+                    scrollToBottomAnimated: scrollToBottomAnimated
+                )
             }
         }
     }
@@ -237,23 +247,33 @@ final class HighPerformanceChatListView: UIView {
         let diff = ChatRenderDiff.make(old: renderedEntries, new: visibleEntries)
         guard !diff.isEmpty else { return }
         heightCache.removeAll()
-        applyEntries(visibleEntries, animated: true)
+        applyEntries(
+            visibleEntries,
+            animated: true,
+            scrollToBottomAnimated: true
+        )
     }
 
-    private func applyEntries(_ visibleEntries: [ChatEntry], animated: Bool) {
+    private func applyEntries(
+        _ visibleEntries: [ChatEntry],
+        animated: Bool,
+        scrollToBottomAnimated: Bool
+    ) {
         if shouldDeferEntriesApplication() {
             pendingEntries = visibleEntries
             pendingEntriesAnimated = pendingEntriesAnimated || animated
+            pendingScrollToBottomAnimated = pendingScrollToBottomAnimated || scrollToBottomAnimated
             return
         }
 
         pendingEntries = nil
         pendingEntriesAnimated = false
+        pendingScrollToBottomAnimated = false
         renderedEntries = visibleEntries
         entries = visibleEntries
         dataSource.applySnapshot(using: visibleEntries, animatingDifferences: animated)
         if isAutoScrollingToBottom {
-            scrollToBottom(animated: animated)
+            scrollToBottom(animated: scrollToBottomAnimated)
         }
     }
 
@@ -268,8 +288,10 @@ final class HighPerformanceChatListView: UIView {
         guard !shouldDeferEntriesApplication() else { return }
         guard let pendingEntries else { return }
         let animated = pendingEntriesAnimated
+        let scrollToBottomAnimated = pendingScrollToBottomAnimated
         self.pendingEntries = nil
         pendingEntriesAnimated = false
+        pendingScrollToBottomAnimated = false
 
         let diff = ChatRenderDiff.make(old: renderedEntries, new: pendingEntries)
         guard !diff.isEmpty else { return }
@@ -278,7 +300,7 @@ final class HighPerformanceChatListView: UIView {
         entries = pendingEntries
         dataSource.applySnapshot(using: pendingEntries, animatingDifferences: animated)
         if isAutoScrollingToBottom {
-            scrollToBottom(animated: animated)
+            scrollToBottom(animated: scrollToBottomAnimated)
         }
     }
 
