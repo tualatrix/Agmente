@@ -22,6 +22,14 @@ struct SessionSidebarView: View {
 }
 
 private extension SessionSidebarView {
+    var sessionSectionBackgroundColor: Color {
+#if os(iOS)
+        Color(.secondarySystemBackground)
+#else
+        Color(nsColor: .controlBackgroundColor)
+#endif
+    }
+
     var connectionSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Connection").font(.headline)
@@ -33,26 +41,36 @@ private extension SessionSidebarView {
             .disabled(model.selectedServerId == nil)
 
             TextField("Host", text: $model.endpointHost)
+#if os(iOS)
                 .textInputAutocapitalization(.never)
+#endif
                 .disableAutocorrection(true)
                 .textFieldStyle(.roundedBorder)
+#if os(iOS)
                 .keyboardType(.URL)
+#endif
                 .disabled(model.selectedServerId == nil)
 
             SecureField("Bearer token (optional)", text: $model.token)
+#if os(iOS)
                 .textInputAutocapitalization(.never)
+#endif
                 .disableAutocorrection(true)
                 .textFieldStyle(.roundedBorder)
                 .disabled(model.selectedServerId == nil)
 
             TextField("CF Access Client ID (optional)", text: $model.cfAccessClientId)
+#if os(iOS)
                 .textInputAutocapitalization(.never)
+#endif
                 .disableAutocorrection(true)
                 .textFieldStyle(.roundedBorder)
                 .disabled(model.selectedServerId == nil)
 
             SecureField("CF Access Client Secret (optional)", text: $model.cfAccessClientSecret)
+#if os(iOS)
                 .textInputAutocapitalization(.never)
+#endif
                 .disableAutocorrection(true)
                 .textFieldStyle(.roundedBorder)
                 .disabled(model.selectedServerId == nil)
@@ -141,7 +159,7 @@ private extension SessionSidebarView {
 
             }
             .padding()
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(sessionSectionBackgroundColor))
 
             if serverViewModel.sessionSummaries.isEmpty {
                 Text("Most ACP agents do not expose session/list; sessions are cached locally while this app is running.")

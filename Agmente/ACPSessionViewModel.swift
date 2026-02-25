@@ -1,7 +1,11 @@
 import Foundation
-import UIKit
 import ACPClient
 import ACP
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Delegate protocol for session cache operations.
 /// Separates cache storage (owned by delegate) from cache logic (in ACPSessionViewModel).
@@ -65,6 +69,7 @@ final class ACPSessionViewModel: ObservableObject {
 
     @Published private(set) var currentModeId: String?
     @Published private(set) var availableCommands: [SessionCommand] = []
+    @Published var promptText: String = ""
     @Published var selectedCommandName: String?
     @Published private(set) var attachedImages: [ImageAttachment] = []
     @Published private(set) var supportsImageAttachment: Bool = false

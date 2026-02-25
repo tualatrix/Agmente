@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 import ListViewKit
 import MarkdownView
@@ -554,3 +555,39 @@ extension HighPerformanceChatListView: ListViewAdapter {
         }
     }
 }
+#elseif canImport(AppKit)
+import AppKit
+import MarkdownView
+import ACP
+import ACPClient
+
+final class HighPerformanceChatListView: NSView {
+    static let rowInsets = NSEdgeInsets(top: 0, left: 14, bottom: 12, right: 14)
+
+    var actionHandlers: ChatEntryActionHandlers = .none
+    var config: ChatRendererConfig = .default
+    var onAtBottomChanged: ((Bool) -> Void)?
+
+    private(set) var theme: MarkdownTheme = .default
+
+    func setTheme(_ theme: MarkdownTheme) {
+        self.theme = theme
+    }
+
+    func updateContentInsets(_ insets: NSEdgeInsets) {
+        // No-op on macOS fallback renderer.
+    }
+
+    func render(
+        messages: [ChatMessage],
+        animated: Bool = true,
+        scrollToBottomAnimated: Bool? = nil
+    ) {
+        onAtBottomChanged?(true)
+    }
+
+    func scrollToBottom(animated: Bool = true) {
+        onAtBottomChanged?(true)
+    }
+}
+#endif

@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import ACPClient
 import enum AppServerClient.AppServerSkillScope
 
@@ -29,6 +28,7 @@ struct CodexSessionDetailView: View {
     }
 
     private var textEditorHeight: CGFloat {
+#if os(iOS)
         let uiFont = UIFont.preferredFont(forTextStyle: .body)
         let sizingTextView = makeSizingTextView(font: uiFont)
         let baseHeight = uiFont.lineHeight + sizingTextView.textContainerInset.top + sizingTextView.textContainerInset.bottom
@@ -37,9 +37,23 @@ struct CodexSessionDetailView: View {
             return min(110, ceil(baseHeight))
         }
 
-        sizingTextView.text = model.promptText.isEmpty ? " " : model.promptText
+        sizingTextView.text = sessionViewModel.promptText.isEmpty ? " " : sessionViewModel.promptText
         let size = sizingTextView.sizeThatFits(CGSize(width: textEditorWidth, height: .greatestFiniteMagnitude))
         return min(110, ceil(max(baseHeight, size.height)))
+#else
+        let lineHeight: CGFloat = 22
+        let verticalPadding: CGFloat = 14
+        let explicitLines = sessionViewModel.promptText.isEmpty
+            ? [""]
+            : sessionViewModel.promptText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let charsPerLine = max(14, Int((textEditorWidth - 20) / 8))
+        let visualLineCount = explicitLines.reduce(0) { count, line in
+            let wrappedLines = max(1, Int(ceil(Double(max(1, line.count)) / Double(charsPerLine))))
+            return count + wrappedLines
+        }
+        let estimatedHeight = CGFloat(visualLineCount) * lineHeight + verticalPadding
+        return min(110, max(36, ceil(estimatedHeight)))
+#endif
     }
 
     private var selectedCommand: SessionCommand? {
@@ -53,12 +67,14 @@ struct CodexSessionDetailView: View {
         return "Message the agent…"
     }
 
+#if os(iOS)
     private func makeSizingTextView(font: UIFont) -> UITextView {
         let textView = UITextView()
         textView.font = font
         textView.isScrollEnabled = false
         return textView
     }
+#endif
 
     var body: some View {
         ZStack {
@@ -108,7 +124,7 @@ struct CodexSessionDetailView: View {
                         }
                     }
                 } label: {
-                    if #available(iOS 26, *) {
+                    if #available(iOS 26, macOS 26, *) {
                         Image(systemName: "arrow.down")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.primary)
@@ -139,7 +155,14 @@ struct CodexSessionDetailView: View {
         .toolbar {
             if !serverViewModel.sessionId.isEmpty,
                model.canArchiveSessions || model.canDeleteSessionsLocally {
-                ToolbarItem(placement: .topBarTrailing) {
+                let placement: ToolbarItemPlacement = {
+#if os(macOS)
+                    .primaryAction
+#else
+                    .topBarTrailing
+#endif
+                }()
+                ToolbarItem(placement: placement) {
                     Menu {
                         if model.canArchiveSessions {
                             Button(role: .destructive) {
@@ -356,7 +379,7 @@ private extension CodexSessionDetailView {
     }
 
     var composer: some View {
-        let hasPrompt = !model.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasPrompt = !sessionViewModel.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasImages = !sessionViewModel.attachedImages.isEmpty
         let hasCommand = sessionViewModel.selectedCommandName != nil
         let canSendPrompt = model.connectionState == .connected
@@ -416,10 +439,12 @@ private extension CodexSessionDetailView {
             // Text input and send button
             HStack(alignment: .bottom, spacing: 8) {
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: $model.promptText)
+                    TextEditor(text: $sessionViewModel.promptText)
                         .focused($isTextEditorFocused)
+#if os(iOS)
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
+#endif
                         .frame(minHeight: 36, maxHeight: textEditorHeight)
                         .background(
                             GeometryReader { geo in
@@ -436,7 +461,7 @@ private extension CodexSessionDetailView {
                         .scrollContentBackground(.hidden)
                         .accessibilityIdentifier("codexPromptEditor")
 
-                    if model.promptText.isEmpty && sessionViewModel.attachedImages.isEmpty {
+                    if sessionViewModel.promptText.isEmpty && sessionViewModel.attachedImages.isEmpty {
                         Text(promptPlaceholderText)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 16)
@@ -491,11 +516,11 @@ private extension CodexSessionDetailView {
     private func sendPrompt() {
         isTextEditorFocused = false
 
-        let promptText = model.promptText
+        let promptText = sessionViewModel.promptText
         let images = sessionViewModel.attachedImages
         let commandName = sessionViewModel.selectedCommandName
 
-        model.promptText = ""
+        sessionViewModel.promptText = ""
         sessionViewModel.clearImageAttachments()
         sessionViewModel.selectedCommandName = nil
 
@@ -599,7 +624,12 @@ private extension CodexSessionDetailView {
             .foregroundStyle(.blue)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+#if os(iOS)
         .menuStyle(.borderlessButton)
+#endif
+#if os(macOS)
+        .buttonStyle(.plain)
+#endif
     }
 
     var currentModelDisplayName: String {
@@ -680,7 +710,12 @@ private extension CodexSessionDetailView {
             .foregroundStyle(serverViewModel.enabledSkillNames.isEmpty ? Color.secondary : Color.purple)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+#if os(iOS)
         .menuStyle(.borderlessButton)
+#endif
+#if os(macOS)
+        .buttonStyle(.plain)
+#endif
     }
 
     private var skillsDisplayText: String {
@@ -738,7 +773,12 @@ private extension CodexSessionDetailView {
             .foregroundStyle(serverViewModel.permissionPreset == .fullAccess ? Color.orange : Color.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+#if os(iOS)
         .menuStyle(.borderlessButton)
+#endif
+#if os(macOS)
+        .buttonStyle(.plain)
+#endif
         .accessibilityIdentifier("codexPermissionsPicker")
     }
 
@@ -754,7 +794,7 @@ private extension CodexSessionDetailView {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(serverViewModel.isPlanModeEnabled ? Color.blue.opacity(0.15) : Color(.systemGray5))
+            .background(serverViewModel.isPlanModeEnabled ? Color.blue.opacity(0.12) : Color(.systemGray5))
             .foregroundStyle(serverViewModel.isPlanModeEnabled ? Color.blue : Color.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }

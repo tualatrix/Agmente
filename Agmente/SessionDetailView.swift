@@ -1,9 +1,11 @@
 import SwiftUI
-import UIKit
 import PhotosUI
 import Photos
 import ACPClient
 import ACP
+#if os(macOS)
+import AppKit
+#endif
 
 struct SessionDetailView: View {
     @ObservedObject var model: AppViewModel
@@ -28,6 +30,7 @@ struct SessionDetailView: View {
     @State private var scrollPosition: UUID?
 
     private var textEditorHeight: CGFloat {
+#if os(iOS)
         let uiFont = UIFont.preferredFont(forTextStyle: .body)
         let sizingTextView = makeSizingTextView(font: uiFont)
         let baseHeight = uiFont.lineHeight + sizingTextView.textContainerInset.top + sizingTextView.textContainerInset.bottom
@@ -36,9 +39,23 @@ struct SessionDetailView: View {
             return min(110, ceil(baseHeight))
         }
 
-        sizingTextView.text = model.promptText.isEmpty ? " " : model.promptText
+        sizingTextView.text = sessionViewModel.promptText.isEmpty ? " " : sessionViewModel.promptText
         let size = sizingTextView.sizeThatFits(CGSize(width: textEditorWidth, height: .greatestFiniteMagnitude))
         return min(110, ceil(max(baseHeight, size.height)))
+#else
+        let lineHeight: CGFloat = 22
+        let verticalPadding: CGFloat = 14
+        let explicitLines = sessionViewModel.promptText.isEmpty
+            ? [""]
+            : sessionViewModel.promptText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let charsPerLine = max(14, Int((textEditorWidth - 20) / 8))
+        let visualLineCount = explicitLines.reduce(0) { count, line in
+            let wrappedLines = max(1, Int(ceil(Double(max(1, line.count)) / Double(charsPerLine))))
+            return count + wrappedLines
+        }
+        let estimatedHeight = CGFloat(visualLineCount) * lineHeight + verticalPadding
+        return min(110, max(36, ceil(estimatedHeight)))
+#endif
     }
 
     private var selectedCommand: SessionCommand? {
@@ -52,12 +69,14 @@ struct SessionDetailView: View {
         return "Message the agent…"
     }
 
+#if os(iOS)
     private func makeSizingTextView(font: UIFont) -> UITextView {
         let textView = UITextView()
         textView.font = font
         textView.isScrollEnabled = false
         return textView
     }
+#endif
 
     var body: some View {
         ZStack {
@@ -107,7 +126,7 @@ struct SessionDetailView: View {
                         }
                     }
                 } label: {
-                    if #available(iOS 26, *) {
+                    if #available(iOS 26, macOS 26, *) {
                         Image(systemName: "arrow.down")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.primary)
@@ -136,7 +155,14 @@ struct SessionDetailView: View {
         }
         .toolbar {
             if model.canDeleteSessionsLocally, !serverViewModel.sessionId.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
+                let placement: ToolbarItemPlacement = {
+#if os(macOS)
+                    .primaryAction
+#else
+                    .topBarTrailing
+#endif
+                }()
+                ToolbarItem(placement: placement) {
                     Menu {
                         Button(role: .destructive) {
                             showDeleteSessionConfirm = true
@@ -335,7 +361,7 @@ private extension SessionDetailView {
     }
 
     var composer: some View {
-        let hasPrompt = !model.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasPrompt = !sessionViewModel.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasImages = !sessionViewModel.attachedImages.isEmpty
         let hasCommand = sessionViewModel.selectedCommandName != nil
         let canSendPrompt = model.connectionState == .connected
@@ -351,12 +377,12 @@ private extension SessionDetailView {
 
                 // Phase 2: Call ServerViewModel.sendPrompt() directly
                 // Capture state before clearing
-                let promptText = model.promptText
+                let promptText = sessionViewModel.promptText
                 let images = sessionViewModel.attachedImages
                 let commandName = sessionViewModel.selectedCommandName
 
                 // Clear composer immediately for responsiveness
-                model.promptText = ""
+                sessionViewModel.promptText = ""
                 sessionViewModel.clearImageAttachments()
                 sessionViewModel.selectedCommandName = nil
 
@@ -418,10 +444,12 @@ private extension SessionDetailView {
 
             HStack(alignment: .bottom, spacing: 8) {
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: $model.promptText)
+                    TextEditor(text: $sessionViewModel.promptText)
                         .focused($isTextEditorFocused)
+#if os(iOS)
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
+#endif
                         .frame(minHeight: 36, maxHeight: textEditorHeight)
                         .background(
                             GeometryReader { geo in
@@ -437,7 +465,7 @@ private extension SessionDetailView {
                         .font(.body)
                         .scrollContentBackground(.hidden)
 
-                    if model.promptText.isEmpty && sessionViewModel.attachedImages.isEmpty {
+                    if sessionViewModel.promptText.isEmpty && sessionViewModel.attachedImages.isEmpty {
                         Text(promptPlaceholderText)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 16)
@@ -626,7 +654,7 @@ private extension SessionDetailView {
             HStack(spacing: 8) {
                 ForEach(sessionViewModel.attachedImages) { attachment in
                     ZStack(alignment: .topTrailing) {
-                        Image(uiImage: attachment.thumbnail())
+                        Image(platformImage: attachment.thumbnail())
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 60, height: 60)
@@ -1254,9 +1282,11 @@ struct WorkingDirectoryPickerSheet: View {
                 Section {
                     if model.isPendingSession {
                         TextField("Working directory", text: $pendingWorkingDirectory)
+#if os(iOS)
                             .textInputAutocapitalization(.never)
+#endif
                             .disableAutocorrection(true)
-                            .font(.body.monospaced())
+                            .font(.system(.body, design: .monospaced))
                     } else {
                         HStack {
                             Image(systemName: "folder.fill")
@@ -1331,7 +1361,7 @@ struct WorkingDirectoryPickerSheet: View {
                                         Image(systemName: "folder")
                                             .foregroundStyle(.secondary)
                                         Text(directory)
-                                            .font(.body.monospaced())
+                                            .font(.system(.body, design: .monospaced))
                                             .lineLimit(1)
                                             .truncationMode(.middle)
                                         Spacer()
@@ -1347,14 +1377,19 @@ struct WorkingDirectoryPickerSheet: View {
                                     Image(systemName: "folder")
                                         .foregroundStyle(.secondary)
                                     Text(directory)
-                                        .font(.body.monospaced())
+                                        .font(.system(.body, design: .monospaced))
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                     Spacer()
                                 }
                                 .contextMenu {
                                     Button("Copy") {
+#if os(iOS)
                                         UIPasteboard.general.string = directory
+#else
+                                        NSPasteboard.general.clearContents()
+                                        NSPasteboard.general.setString(directory, forType: .string)
+#endif
                                     }
                                 }
                             }
@@ -1367,7 +1402,9 @@ struct WorkingDirectoryPickerSheet: View {
                 }
             }
             .navigationTitle("Working Directory")
+#if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+#endif
             .onAppear {
                 pendingWorkingDirectory = model.currentSessionCwd
             }

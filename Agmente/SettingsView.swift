@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 struct SettingsView: View {
     @Binding var devModeEnabled: Bool
@@ -31,16 +34,19 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-
+#if os(iOS)
                 Section("Chat Rendering") {
                     Toggle("Use high-performance chat list", isOn: $useHighPerformanceChatRenderer)
                     Text("Uses ListViewKit + MarkdownView renderer. Turn off to use the legacy SwiftUI transcript for A/B testing.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+#endif
             }
             .navigationTitle("Settings")
+#if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+#endif
         }
     }
     
@@ -50,7 +56,11 @@ struct SettingsView: View {
         let urlString = "mailto:\(email)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
         
         if let url = URL(string: urlString) {
+#if os(iOS)
             UIApplication.shared.open(url)
+#else
+            NSWorkspace.shared.open(url)
+#endif
         }
     }
 }

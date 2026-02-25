@@ -253,6 +253,30 @@ final class SessionIsolationTests: XCTestCase {
         XCTAssertTrue(model.selectedServerViewModel?.currentSessionViewModel?.chatMessages.last?.isStreaming ?? false)
     }
 
+    /// Test that composer draft text is isolated per session (and therefore per window/session VM).
+    func testPromptText_IsolatedPerSession() {
+        let sessionIdA = "session-a"
+        let sessionIdB = "session-b"
+
+        model.selectedServerViewModel?.selectedSessionId = sessionIdA
+        model.selectedServerViewModel?.currentSessionViewModel?.promptText = "draft for A"
+
+        model.selectedServerViewModel?.selectedSessionId = sessionIdB
+        model.selectedServerViewModel?.currentSessionViewModel?.promptText = "draft for B"
+
+        model.selectedServerViewModel?.selectedSessionId = sessionIdA
+        XCTAssertEqual(
+            model.selectedServerViewModel?.currentSessionViewModel?.promptText,
+            "draft for A"
+        )
+
+        model.selectedServerViewModel?.selectedSessionId = sessionIdB
+        XCTAssertEqual(
+            model.selectedServerViewModel?.currentSessionViewModel?.promptText,
+            "draft for B"
+        )
+    }
+
     /// Test that view models are lazily created.
     func testViewModelCreation_IsLazy() {
         let sessionId = "lazy-session"

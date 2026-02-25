@@ -92,22 +92,28 @@ struct AddServerView: View {
                         .accessibilityIdentifier("ProtocolPicker")
 
                         TextField("Host", text: $host)
+#if os(iOS)
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
+#endif
                             .disableAutocorrection(true)
                             .onChange(of: host, perform: normalizeHostInput)
                             .focused($focusedField, equals: .host)
                             .accessibilityIdentifier("HostField")
 
                         SecureField("Bearer token (optional)", text: $token)
+#if os(iOS)
                             .textInputAutocapitalization(.never)
+#endif
                             .disableAutocorrection(true)
                             .focused($focusedField, equals: .token)
                     }
 
                     Section {
                         TextField("Working directory", text: $workingDirectory)
+#if os(iOS)
                             .textInputAutocapitalization(.never)
+#endif
                             .disableAutocorrection(true)
                             .focused($focusedField, equals: .workingDirectory)
                     } footer: {
@@ -132,12 +138,16 @@ struct AddServerView: View {
                     Section {
                         DisclosureGroup("Cloudflare Access", isExpanded: $showCloudflareAccess) {
                             TextField("Client ID", text: $cfAccessClientId)
+#if os(iOS)
                                 .textInputAutocapitalization(.never)
+#endif
                                 .disableAutocorrection(true)
                                 .focused($focusedField, equals: .cfAccessClientId)
 
                             SecureField("Client Secret", text: $cfAccessClientSecret)
+#if os(iOS)
                                 .textInputAutocapitalization(.never)
+#endif
                                 .disableAutocorrection(true)
                                 .focused($focusedField, equals: .cfAccessClientSecret)
                         }

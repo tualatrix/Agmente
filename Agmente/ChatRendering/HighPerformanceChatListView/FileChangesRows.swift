@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 import ACPClient
 
@@ -355,3 +356,4 @@ final class FileChangePreviewRowView: UIView {
         return CGSize(width: size.width, height: max(textBlockHeight, iconSize))
     }
 }
+#endif

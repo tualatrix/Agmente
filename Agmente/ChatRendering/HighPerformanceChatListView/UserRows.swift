@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 
 final class UserTextRowView: BaseRowView {
@@ -84,3 +85,4 @@ final class UserImagesRowView: BaseRowView {
         setNeedsLayout()
     }
 }
+#endif

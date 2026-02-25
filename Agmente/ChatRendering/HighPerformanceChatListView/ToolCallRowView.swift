@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 import ACP
 import ACPClient
@@ -472,3 +473,4 @@ final class ToolCallRowView: BaseRowView {
         }
     }
 }
+#endif

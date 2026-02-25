@@ -144,7 +144,9 @@ struct UserInputQuestionsSheet: View {
                             .tag(index)
                     }
                 }
+#if os(iOS)
                 .tabViewStyle(.page(indexDisplayMode: .never))
+#endif
                 .animation(.easeInOut(duration: 0.25), value: currentPage)
 
                 // Bottom bar with navigation and submit
@@ -153,7 +155,9 @@ struct UserInputQuestionsSheet: View {
                     .padding(.bottom, 16)
             }
             .navigationTitle("Plan Mode Question")
+#if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+#endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Skip") {
