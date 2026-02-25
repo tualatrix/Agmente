@@ -1,0 +1,5 @@
+// Shared signing defaults for all contributors.
+// Override locally in Signing.local.xcconfig without touching the Xcode project.
+AGMENTE_DEVELOPMENT_TEAM = 66PSKAC9V2
+
+#include? "Signing.local.xcconfig"
