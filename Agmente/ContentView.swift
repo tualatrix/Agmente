@@ -1365,49 +1365,71 @@ private struct NewSessionSheet: View {
     let onCreate: () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
+    @ViewBuilder
+    private var contentForm: some View {
+#if os(macOS)
+        ScrollView {
+            Form {
+                formSections
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: 680)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+        }
+#else
+        Form {
+            formSections
+        }
+#endif
+    }
+
+    @ViewBuilder
+    private var formSections: some View {
+        Section {
+            TextField("Working directory", text: $workingDirectory)
+#if os(iOS)
+                .textInputAutocapitalization(.never)
+#endif
+                .disableAutocorrection(true)
+                .font(.system(.body, design: .monospaced))
+        } header: {
+            Text("Working Directory")
+        } footer: {
+            Text("The directory where the agent will operate for this session.")
+        }
+
+        let trimmedCurrent = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let history = usedWorkingDirectories.filter { $0 != trimmedCurrent }
+        if !history.isEmpty {
+            Section {
+                ForEach(history, id: \.self) { directory in
+                    Button {
+                        workingDirectory = directory
+                    } label: {
+                        HStack {
+                            Image(systemName: "folder")
+                                .foregroundStyle(.secondary)
+                            Text(directory)
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("Previously Used")
+            } footer: {
+                Text("Tap to fill the working directory.")
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Working directory", text: $workingDirectory)
-#if os(iOS)
-                        .textInputAutocapitalization(.never)
-#endif
-                        .disableAutocorrection(true)
-                        .font(.system(.body, design: .monospaced))
-                } header: {
-                    Text("Working Directory")
-                } footer: {
-                    Text("The directory where the agent will operate for this session.")
-                }
-
-                let trimmedCurrent = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
-                let history = usedWorkingDirectories.filter { $0 != trimmedCurrent }
-                if !history.isEmpty {
-                    Section {
-                        ForEach(history, id: \.self) { directory in
-                            Button {
-                                workingDirectory = directory
-                            } label: {
-                                HStack {
-                                    Image(systemName: "folder")
-                                        .foregroundStyle(.secondary)
-                                    Text(directory)
-                                        .font(.system(.body, design: .monospaced))
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                    Spacer()
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    } header: {
-                        Text("Previously Used")
-                    } footer: {
-                        Text("Tap to fill the working directory.")
-                    }
-                }
-            }
+            contentForm
             .navigationTitle("New Session")
 #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -1422,7 +1444,11 @@ private struct NewSessionSheet: View {
                 }
             }
         }
+#if os(macOS)
+        .frame(minWidth: 700, idealWidth: 760, minHeight: 430, idealHeight: 520)
+#else
         .presentationDetents([.medium])
+#endif
     }
 }
 
