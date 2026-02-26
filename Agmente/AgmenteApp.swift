@@ -17,5 +17,15 @@ struct AgmenteApp: App {
             PromptComposerCommands()
         }
 #endif
+#if os(macOS)
+        WindowGroup("Session", id: SessionWindowStore.windowId, for: String.self) { value in
+            if let sessionKey = value.wrappedValue {
+                SessionDetailWindowHost(sessionKey: sessionKey)
+                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            } else {
+                ContentUnavailableView("Session unavailable", systemImage: "exclamationmark.triangle")
+            }
+        }
+#endif
     }
 }

@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 import ListViewKit
 import MarkdownView
@@ -244,3 +245,4 @@ final class ThoughtRowView: BaseRowView {
         onToggle?()
     }
 }
+#endif

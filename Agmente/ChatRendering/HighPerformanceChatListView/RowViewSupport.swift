@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 import ListViewKit
 
@@ -57,3 +58,4 @@ extension UIFont {
         return UIFont(descriptor: descriptor, size: pointSize)
     }
 }
+#endif

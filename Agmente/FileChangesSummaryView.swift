@@ -225,7 +225,14 @@ struct FileChangesReviewSheet: View {
             }
             .navigationTitle("File Changes")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                let placement: ToolbarItemPlacement = {
+#if os(macOS)
+                    .primaryAction
+#else
+                    .topBarTrailing
+#endif
+                }()
+                ToolbarItem(placement: placement) {
                     Button("Done") {
                         dismiss()
                     }

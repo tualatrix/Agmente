@@ -7,7 +7,11 @@
 
 import Foundation
 import Network
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 class LocalNetworkPrivacy: NSObject {
     private let service: NetService
@@ -31,7 +35,7 @@ class LocalNetworkPrivacy: NSObject {
                 return
             }
 
-            guard UIApplication.shared.applicationState == .active else {
+            guard self.isApplicationActive else {
                 return
             }
 
@@ -44,6 +48,16 @@ class LocalNetworkPrivacy: NSObject {
                 self.service.publish()
             }
         }
+    }
+
+    private var isApplicationActive: Bool {
+#if canImport(UIKit)
+        UIApplication.shared.applicationState == .active
+#elseif canImport(AppKit)
+        NSApplication.shared.isActive
+#else
+        true
+#endif
     }
 
     deinit {

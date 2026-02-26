@@ -54,116 +54,150 @@ struct AddServerView: View {
         case workingDirectory
     }
 
+    @ViewBuilder
+    private var serverFormContainer: some View {
+#if os(macOS)
+        ScrollView {
+            Form {
+                formSections
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: 720)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+        }
+#else
+        Form {
+            formSections
+        }
+#endif
+    }
+
+    @ViewBuilder
+    private var formSections: some View {
+        Section {
+            TextField("Display name", text: $name)
+                .focused($focusedField, equals: .name)
+                .accessibilityIdentifier("ServerNameField")
+        }
+
+        Section {
+            Picker("Server Type", selection: $serverType) {
+                Text("ACP")
+                    .tag(ServerType.acp)
+                    .accessibilityIdentifier("ServerTypeACP")
+                    .accessibilityLabel("ACP")
+                Text("Codex")
+                    .tag(ServerType.codexAppServer)
+                    .accessibilityIdentifier("ServerTypeCodex")
+                    .accessibilityLabel("Codex App-Server")
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("ServerTypePicker")
+        } footer: {
+            Text(serverType.description)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+
+        Section {
+            Picker("Protocol", selection: $scheme) {
+                Text("ws").tag("ws")
+                Text("wss").tag("wss")
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("ProtocolPicker")
+
+            TextField("Host", text: $host)
+#if os(iOS)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+#endif
+                .disableAutocorrection(true)
+                .onChange(of: host, perform: normalizeHostInput)
+                .focused($focusedField, equals: .host)
+                .accessibilityIdentifier("HostField")
+
+            SecureField("Bearer token (optional)", text: $token)
+#if os(iOS)
+                .textInputAutocapitalization(.never)
+#endif
+                .disableAutocorrection(true)
+                .focused($focusedField, equals: .token)
+        }
+
+        Section {
+            TextField("Working directory", text: $workingDirectory)
+#if os(iOS)
+                .textInputAutocapitalization(.never)
+#endif
+                .disableAutocorrection(true)
+                .focused($focusedField, equals: .workingDirectory)
+        } footer: {
+            VStack(alignment: .leading, spacing: 8) {
+                if hasAttemptedSave && isWorkingDirectoryEmpty && !allowsEmptyWorkingDirectory {
+                    Label("A working directory is required for the agent to operate safely.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.footnote)
+                }
+                if hasAttemptedSave && isWorkingDirectoryRoot {
+                    Label("Using root (/) as working directory is dangerous and may crash the agent.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.footnote)
+                }
+                Link(destination: URL(string: "https://agmente.halliharp.com/docs/guides/local-agent")!) {
+                    Label("Need help? View the setup guide", systemImage: "questionmark.circle")
+                }
+                .font(.footnote)
+            }
+        }
+
+        Section {
+            DisclosureGroup("Cloudflare Access", isExpanded: $showCloudflareAccess) {
+                TextField("Client ID", text: $cfAccessClientId)
+#if os(iOS)
+                    .textInputAutocapitalization(.never)
+#endif
+                    .disableAutocorrection(true)
+                    .focused($focusedField, equals: .cfAccessClientId)
+
+                SecureField("Client Secret", text: $cfAccessClientSecret)
+#if os(iOS)
+                    .textInputAutocapitalization(.never)
+#endif
+                    .disableAutocorrection(true)
+                    .focused($focusedField, equals: .cfAccessClientSecret)
+            }
+        }
+
+#if !os(macOS)
+        Section {
+            Button {
+                saveServer()
+            } label: {
+                HStack {
+                    Spacer()
+                    if isSaving {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .padding(.trailing, 8)
+                    }
+                    Text(editingServer == nil ? "Save Server" : "Update Server")
+                        .fontWeight(.semibold)
+                    Spacer()
+                }
+            }
+            .disabled(!canSave)
+            .accessibilityIdentifier("SaveServerButton")
+            .accessibilityLabel(editingServer == nil ? "Save Server" : "Update Server")
+        }
+#endif
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
-                Form {
-                    Section {
-                        TextField("Display name", text: $name)
-                            .focused($focusedField, equals: .name)
-                            .accessibilityIdentifier("ServerNameField")
-                    }
-
-                    Section {
-                        Picker("Server Type", selection: $serverType) {
-                            Text("ACP")
-                                .tag(ServerType.acp)
-                                .accessibilityIdentifier("ServerTypeACP")
-                                .accessibilityLabel("ACP")
-                            Text("Codex")
-                                .tag(ServerType.codexAppServer)
-                                .accessibilityIdentifier("ServerTypeCodex")
-                                .accessibilityLabel("Codex App-Server")
-                        }
-                        .pickerStyle(.segmented)
-                        .accessibilityIdentifier("ServerTypePicker")
-                    } footer: {
-                        Text(serverType.description)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Section {
-                        Picker("Protocol", selection: $scheme) {
-                            Text("ws").tag("ws")
-                            Text("wss").tag("wss")
-                        }
-                        .pickerStyle(.segmented)
-                        .accessibilityIdentifier("ProtocolPicker")
-
-                        TextField("Host", text: $host)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
-                            .onChange(of: host, perform: normalizeHostInput)
-                            .focused($focusedField, equals: .host)
-                            .accessibilityIdentifier("HostField")
-
-                        SecureField("Bearer token (optional)", text: $token)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
-                            .focused($focusedField, equals: .token)
-                    }
-
-                    Section {
-                        TextField("Working directory", text: $workingDirectory)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
-                            .focused($focusedField, equals: .workingDirectory)
-                    } footer: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            if hasAttemptedSave && isWorkingDirectoryEmpty && !allowsEmptyWorkingDirectory {
-                                Label("A working directory is required for the agent to operate safely.", systemImage: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
-                                    .font(.footnote)
-                            }
-                            if hasAttemptedSave && isWorkingDirectoryRoot {
-                                Label("Using root (/) as working directory is dangerous and may crash the agent.", systemImage: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
-                                    .font(.footnote)
-                            }
-                            Link(destination: URL(string: "https://agmente.halliharp.com/docs/guides/local-agent")!) {
-                                Label("Need help? View the setup guide", systemImage: "questionmark.circle")
-                            }
-                            .font(.footnote)
-                        }
-                    }
-
-                    Section {
-                        DisclosureGroup("Cloudflare Access", isExpanded: $showCloudflareAccess) {
-                            TextField("Client ID", text: $cfAccessClientId)
-                                .textInputAutocapitalization(.never)
-                                .disableAutocorrection(true)
-                                .focused($focusedField, equals: .cfAccessClientId)
-
-                            SecureField("Client Secret", text: $cfAccessClientSecret)
-                                .textInputAutocapitalization(.never)
-                                .disableAutocorrection(true)
-                                .focused($focusedField, equals: .cfAccessClientSecret)
-                        }
-                    }
-
-                    Section {
-                        Button {
-                            saveServer()
-                        } label: {
-                            HStack {
-                                Spacer()
-                                if isSaving {
-                                    ProgressView()
-                                        .progressViewStyle(.circular)
-                                        .padding(.trailing, 8)
-                                }
-                                Text(editingServer == nil ? "Save Server" : "Update Server")
-                                    .fontWeight(.semibold)
-                                Spacer()
-                            }
-                        }
-                        .disabled(!canSave)
-                        .accessibilityIdentifier("SaveServerButton")
-                        .accessibilityLabel(editingServer == nil ? "Save Server" : "Update Server")
-                    }
-                }
+                serverFormContainer
                 .blur(radius: showingSummaryOverlay ? 3 : 0)
                 .allowsHitTesting(!showingSummaryOverlay)
 
@@ -206,6 +240,9 @@ struct AddServerView: View {
                     .accessibilityIdentifier("saveToolbarButton")
                 }
             }
+#if os(macOS)
+            .frame(minWidth: 720, idealWidth: 760, minHeight: 620, idealHeight: 680)
+#endif
         }
         .alert(editingServer == nil ? "Unable to Add Server" : "Unable to Update Server", isPresented: $showError) {
             Button("OK", role: .cancel) {

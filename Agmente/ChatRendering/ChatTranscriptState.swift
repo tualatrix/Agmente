@@ -12,8 +12,15 @@ final class ChatTranscriptState {
     @ObservationIgnored
     weak var listView: HighPerformanceChatListView?
 
+    @ObservationIgnored
+    var scrollToBottomHandler: ((Bool) -> Void)?
+
     func scrollToBottom(animated: Bool = true) {
-        listView?.scrollToBottom(animated: animated)
+        if let listView {
+            listView.scrollToBottom(animated: animated)
+            return
+        }
+        scrollToBottomHandler?(animated)
     }
 }
 

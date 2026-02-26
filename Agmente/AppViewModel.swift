@@ -181,9 +181,6 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
         return result
     }
 
-    // Prompt
-    @Published var promptText: String = ""
-    
     // Logs / updates
     @Published private(set) var updates: [LogLine] = []
 

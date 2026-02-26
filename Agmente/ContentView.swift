@@ -9,19 +9,38 @@ struct ContentView: View {
     @State private var showingAddServer = false
     @State private var showingSettings = false
     @State private var navigationPath: [NavigationDestination] = []
+    @State private var splitSelection: NavigationDestination?
     @State private var serverToDelete: ACPServerConfiguration?
     @State private var serverToEdit: ACPServerConfiguration?
     @State private var previousServerId: UUID?
     @Environment(\.scenePhase) private var scenePhase
 
-    var body: some View {
+    @ViewBuilder
+    private var containerView: some View {
+#if os(macOS)
+        NavigationSplitView {
+            rootContent
+                .navigationTitle("")
+                .navigationSplitViewColumnWidth(min: 350, ideal: 350)
+                .toolbar { toolbarContent }
+        } detail: {
+            macDetailContent
+        }
+#else
         NavigationStack(path: $navigationPath) {
             rootContent
                 .navigationTitle("")
+#if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+#endif
                 .toolbar { toolbarContent }
                 .navigationDestination(for: NavigationDestination.self, destination: destinationView)
         }
+#endif
+    }
+
+    var body: some View {
+        containerView
         .sheet(isPresented: $showingAddServer, content: addServerSheet)
         .sheet(item: $serverToEdit, content: editServerSheet)
         .sheet(isPresented: $showingSettings, content: settingsSheet)
@@ -39,6 +58,13 @@ struct ContentView: View {
             }
         }
         .onChange(of: model.serverSessionId) { oldValue, newValue in
+#if os(macOS)
+            if newValue.isEmpty {
+                splitSelection = nil
+            } else {
+                splitSelection = .session(newValue)
+            }
+#else
             // Skip auto-navigation only if:
             // 1. We just switched servers (previousServerId differs from current)
             // 2. AND the new server already had a session (oldValue was empty, newValue is pre-existing)
@@ -74,8 +100,15 @@ struct ContentView: View {
             } else if navigationPath.last != .session(newValue) {
                 navigationPath = preserved + [.session(newValue)]
             }
+#endif
         }
         .onAppear {
+#if os(macOS)
+            let sessionId = model.serverSessionId
+            if !sessionId.isEmpty {
+                splitSelection = .session(sessionId)
+            }
+#else
             // Auto-navigate to last session on app launch (previousServerId is nil initially)
             let sessionId = model.serverSessionId
             if !sessionId.isEmpty {
@@ -87,6 +120,7 @@ struct ContentView: View {
                 }
                 navigationPath = preserved + [.session(sessionId)]
             }
+#endif
         }
         .alert("Delete Server", isPresented: .init(
             get: { serverToDelete != nil },
@@ -110,6 +144,10 @@ struct ContentView: View {
 }
 
 private extension ContentView {
+    func sessionTitle(for sessionId: String) -> String {
+        model.serverSessionSummaries.first(where: { $0.id == sessionId })?.title ?? "Session"
+    }
+
     @ViewBuilder
     var rootContent: some View {
         if model.selectedServerId == nil {
@@ -119,7 +157,23 @@ private extension ContentView {
                 .background(Color(.systemGroupedBackground))
                 .ignoresSafeArea()
         } else {
-            SessionListPage(model: model, navigationPath: $navigationPath)
+            SessionListPage(
+                model: model,
+                navigationPath: $navigationPath,
+                splitSelection: $splitSelection
+            )
+        }
+    }
+
+    @ViewBuilder
+    var macDetailContent: some View {
+        if let selection = splitSelection {
+            destinationView(selection)
+        } else {
+            SessionPlaceholderView(onAddServer: { showingAddServer = true })
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding()
+                .background(Color(.systemGroupedBackground))
         }
     }
 
@@ -127,6 +181,7 @@ private extension ContentView {
     func destinationView(_ destination: NavigationDestination) -> some View {
         switch destination {
         case .session(let sessionId):
+            let title = sessionTitle(for: sessionId)
             // Phase 1: Open session in .task to avoid side effects in view body,
             // then conditionally render SessionDetailView with the current session's view model.
             // Use .id() to force re-render when session state changes.
@@ -154,6 +209,7 @@ private extension ContentView {
                     ProgressView("Loading session...")
                 }
             }
+            .navigationTitle(title)
             // Force view re-evaluation when session state changes
             .id(model.serverSessionId)
             .task(id: sessionId) {
@@ -162,7 +218,12 @@ private extension ContentView {
         case .developerLogs:
             DeveloperLogsView(model: model)
         case .folderSessions(let path, let displayName):
-            FolderSessionsView(model: model, folderPath: path, folderDisplayName: displayName)
+            FolderSessionsView(
+                model: model,
+                folderPath: path,
+                folderDisplayName: displayName,
+                splitSelection: $splitSelection
+            )
         }
     }
 
@@ -240,7 +301,7 @@ private extension ContentView {
                 }
                 .accessibilityIdentifier("addServerMenuAction")
             } label: {
-                if #available(iOS 26.0, *) {
+                if #available(iOS 26.0, macOS 26.0, *) {
                     HStack(spacing: 10) {
                         Circle()
                             .fill(model.connectionState == .connected ? Color.green : Color.orange)
@@ -273,7 +334,14 @@ private extension ContentView {
             }
         }
         
-        ToolbarItem(placement: .navigationBarTrailing) {
+        let trailingPlacement: ToolbarItemPlacement = {
+#if os(macOS)
+            .primaryAction
+#else
+            .navigationBarTrailing
+#endif
+        }()
+        ToolbarItem(placement: trailingPlacement) {
             Menu {
                 Button {
                     showingSettings = true
@@ -316,7 +384,9 @@ private extension ContentView {
 private struct SessionListPage: View {
     @ObservedObject var model: AppViewModel
     @Binding var navigationPath: [NavigationDestination]
+    @Binding var splitSelection: NavigationDestination?
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openWindow) private var openWindow
     @State private var sessionSearchText: String = ""
     @State private var showingNewSessionSheet: Bool = false
     @State private var customWorkingDirectory: String = ""
@@ -416,12 +486,122 @@ private struct SessionListPage: View {
         }
     }
 
+    private func navigate(to destination: NavigationDestination) {
+#if os(macOS)
+        splitSelection = destination
+#else
+        navigationPath.append(destination)
+#endif
+    }
+
+    #if os(macOS)
+    private func sessionWindowKey(for sessionId: String) -> String {
+        let serverId = model.selectedServerId?.uuidString ?? "unknown-server"
+        return "\(serverId)::\(sessionId)"
+    }
+
+    private func openSessionInNewWindow(_ sessionId: String) {
+        model.openSession(sessionId)
+
+        if let serverViewModel = model.selectedServerViewModel,
+           serverViewModel.selectedSessionId == sessionId,
+           let sessionViewModel = serverViewModel.currentSessionViewModel {
+            let title = model.serverSessionSummaries.first(where: { $0.id == sessionId })?.title ?? "Session"
+            let payload = SessionWindowPayload(
+                model: model,
+                sessionId: sessionId,
+                title: title,
+                acpServerViewModel: serverViewModel,
+                codexServerViewModel: nil,
+                sessionViewModel: sessionViewModel
+            )
+            let key = SessionWindowStore.shared.store(payload, for: sessionWindowKey(for: sessionId))
+            openWindow(id: SessionWindowStore.windowId, value: key)
+            return
+        }
+
+        if let codexViewModel = model.selectedCodexServerViewModel,
+           codexViewModel.selectedSessionId == sessionId,
+           let sessionViewModel = codexViewModel.currentSessionViewModel {
+            let title = model.serverSessionSummaries.first(where: { $0.id == sessionId })?.title ?? "Session"
+            let payload = SessionWindowPayload(
+                model: model,
+                sessionId: sessionId,
+                title: title,
+                acpServerViewModel: nil,
+                codexServerViewModel: codexViewModel,
+                sessionViewModel: sessionViewModel
+            )
+            let key = SessionWindowStore.shared.store(payload, for: sessionWindowKey(for: sessionId))
+            openWindow(id: SessionWindowStore.windowId, value: key)
+        }
+    }
+    #endif
+
+    @ViewBuilder
+    private func destinationTrigger<Label: View>(
+        _ destination: NavigationDestination,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+#if os(macOS)
+        Button {
+            navigate(to: destination)
+        } label: {
+            label()
+        }
+        .buttonStyle(.plain)
+#else
+        NavigationLink(value: destination) {
+            label()
+        }
+        .buttonStyle(.plain)
+#endif
+    }
+
+    @ViewBuilder
+    private func sessionDestinationTrigger(
+        _ summary: SessionSummary,
+        displayCwd: String?,
+        isActive: Bool,
+        showCwd: Bool = true
+    ) -> some View {
+        let destination = NavigationDestination.session(summary.id)
+        destinationTrigger(destination) {
+            SessionRow(
+                title: summary.title ?? "New Chat",
+                lastMessage: model.selectedServerId.flatMap {
+                    model.getLastMessagePreview(for: $0, sessionId: summary.id)
+                },
+                cwd: displayCwd,
+                isActive: isActive,
+                showCwd: showCwd
+            )
+        }
+#if os(macOS)
+        .contextMenu {
+            if model.canArchiveSessions {
+                Button("Archive Session") {
+                    model.archiveSession(summary.id)
+                }
+            }
+
+            Button("Open in New Window") {
+                openSessionInNewWindow(summary.id)
+            }
+        }
+#endif
+    }
+
     private var searchPlacement: SearchFieldPlacement {
+#if os(macOS)
+        return .toolbar
+#else
         if #available(iOS 26.0, *) {
             return .toolbar
         } else {
             return .navigationBarDrawer(displayMode: .automatic)
         }
+#endif
     }
 
     var body: some View {
@@ -467,18 +647,24 @@ private struct SessionListPage: View {
                 await model.refreshSessions()
             }
             
+            #if os(iOS)
             if #available(iOS 26.0, *) {
 //                Spacer(minLength: 0)
             } else {
                 footerActions
             }
+            #else
+            footerActions
+            #endif
         }
         .searchable(
             text: $sessionSearchText,
             placement: searchPlacement,
             prompt: "Search sessions"
         )
+#if os(iOS)
         .textInputAutocapitalization(.never)
+#endif
         .disableAutocorrection(true)
         .sheet(isPresented: $showingNewSessionSheet) {
             NewSessionSheet(
@@ -493,7 +679,14 @@ private struct SessionListPage: View {
         }
         .toolbar {
             if !model.serverSessionSummaries.isEmpty {
-                ToolbarItem(placement: .navigationBarLeading) {
+                let leadingPlacement: ToolbarItemPlacement = {
+#if os(macOS)
+                    .automatic
+#else
+                    .navigationBarLeading
+#endif
+                }()
+                ToolbarItem(placement: leadingPlacement) {
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             groupingMode = groupingMode.toggled
@@ -506,6 +699,7 @@ private struct SessionListPage: View {
                 }
             }
 
+#if os(iOS)
             if #available(iOS 26.0, *) {
                 DefaultToolbarItem(kind: .search, placement: .bottomBar)
 
@@ -516,6 +710,7 @@ private struct SessionListPage: View {
                 }
 //                ToolbarSpacer(.flexible, placement: .bottomBar)
             }
+#endif
         }
         .onAppear {
             if model.connectionState == .disconnected && !model.isConnecting {
@@ -625,7 +820,7 @@ private struct SessionListPage: View {
                         Spacer()
                         
                         Button {
-                            navigationPath.append(.developerLogs)
+                            navigate(to: .developerLogs)
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "doc.text")
@@ -662,13 +857,13 @@ private struct SessionListPage: View {
         .contentShape(Rectangle())
         .onTapGesture {
             guard model.devModeEnabled && !summaryCardCollapsed else { return }
-            navigationPath.append(.developerLogs)
+            navigate(to: .developerLogs)
         }
     }
 
     private func newSessionButton(expanded: Bool) -> some View {
         Group {
-            if #available(iOS 26.0, *) {
+            if #available(iOS 26.0, macOS 26.0, *) {
                 newSessionButtonModern(expanded: expanded)
             } else {
                 newSessionButtonLegacy(expanded: expanded)
@@ -685,10 +880,34 @@ private struct SessionListPage: View {
     private var newSessionButtonForeground: Color {
         .white
     }
+
+    private var newSessionControlHeight: CGFloat {
+#if os(macOS)
+        36
+#else
+        50
+#endif
+    }
+
+    private var newSessionChevronWidth: CGFloat {
+#if os(macOS)
+        34
+#else
+        50
+#endif
+    }
+
+    private var newSessionButtonSpacing: CGFloat {
+#if os(macOS)
+        6
+#else
+        0
+#endif
+    }
     
     @available(iOS 26.0, *)
     private func newSessionButtonModern(expanded: Bool) -> some View {
-        HStack(spacing: 0) {
+        HStack(spacing: newSessionButtonSpacing) {
             Button {
                 guard model.connectionState == .connected else { return }
                 model.sendNewSession()
@@ -701,12 +920,22 @@ private struct SessionListPage: View {
                         .foregroundStyle(.white)
                 }
                 .frame(maxWidth: expanded ? .infinity : nil)
+                .frame(height: newSessionControlHeight)
             }
             .buttonStyle(.borderedProminent)
             .tint(newSessionButtonTint)
             .foregroundStyle(newSessionButtonForeground)
+#if os(macOS)
+            .controlSize(.regular)
+#else
             .controlSize(.large)
+#endif
+#if os(macOS)
+            .frame(height: newSessionControlHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+#else
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0))
+#endif
             .accessibilityIdentifier("newSessionButton")
             
             Menu {
@@ -720,21 +949,30 @@ private struct SessionListPage: View {
             } label: {
                 Image(systemName: "chevron.down")
                     .font(.caption.weight(.semibold))
-                    .frame(width: 32, height: 44)
+                    .frame(width: newSessionChevronWidth, height: newSessionControlHeight)
                     .foregroundStyle(.white)
             }
             .buttonStyle(.borderedProminent)
             .tint(newSessionButtonTint)
             .foregroundStyle(newSessionButtonForeground)
+#if os(macOS)
+            .controlSize(.regular)
+#else
             .controlSize(.large)
+#endif
+#if os(macOS)
+            .frame(height: newSessionControlHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+#else
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 10, topTrailingRadius: 10))
+#endif
             .accessibilityIdentifier("newSessionMenuButton")
         }
         .opacity(model.connectionState != .connected ? 0.7 : 1)
     }
     
     private func newSessionButtonLegacy(expanded: Bool) -> some View {
-        HStack(spacing: 0) {
+        HStack(spacing: newSessionButtonSpacing) {
             Button {
                 guard model.connectionState == .connected else { return }
                 model.sendNewSession()
@@ -742,12 +980,20 @@ private struct SessionListPage: View {
                 Label("New Session", systemImage: "plus")
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: expanded ? .infinity : nil)
-                    .frame(height: 50)
+                    .frame(height: newSessionControlHeight)
+#if os(macOS)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+#else
                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0))
+#endif
             }
             .buttonStyle(.borderedProminent)
             .tint(newSessionButtonTint)
             .foregroundStyle(newSessionButtonForeground)
+#if os(macOS)
+            .frame(height: newSessionControlHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+#endif
             
             Menu {
                 Button {
@@ -760,12 +1006,20 @@ private struct SessionListPage: View {
             } label: {
                 Image(systemName: "chevron.down")
                     .font(.caption.weight(.semibold))
-                    .frame(width: 50, height: 50)
+                    .frame(width: newSessionChevronWidth, height: newSessionControlHeight)
+#if os(macOS)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+#else
                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 10, topTrailingRadius: 10))
+#endif
             }
             .buttonStyle(.borderedProminent)
             .tint(newSessionButtonTint)
             .foregroundStyle(newSessionButtonForeground)
+#if os(macOS)
+            .frame(height: newSessionControlHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+#endif
         }
         .opacity(model.connectionState != .connected ? 0.7 : 1)
     }
@@ -774,8 +1028,13 @@ private struct SessionListPage: View {
         HStack {
             newSessionButton(expanded: true)
         }
+#if os(macOS)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+#else
         .padding(.horizontal, 4)
         .padding(.bottom, 6)
+#endif
     }
 
     private func filterSessions(_ sessions: [SessionSummary]) -> [SessionSummary] {
@@ -800,17 +1059,11 @@ private struct SessionListPage: View {
                 ForEach(sessions, id: \.id) { session in
                     let summary = session.summary
                     let displayCwd = summary.cwd ?? defaultCwd
-                    NavigationLink(value: NavigationDestination.session(summary.id)) {
-                        SessionRow(
-                            title: summary.title ?? "New Chat",
-                            lastMessage: model.selectedServerId.flatMap {
-                                model.getLastMessagePreview(for: $0, sessionId: summary.id)
-                            },
-                            cwd: displayCwd,
-                            isActive: session.isActive
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    sessionDestinationTrigger(
+                        summary,
+                        displayCwd: displayCwd,
+                        isActive: session.isActive
+                    )
                 }
             }
         }
@@ -837,22 +1090,16 @@ private struct SessionListPage: View {
                 ForEach(sessions, id: \.id) { session in
                     let summary = session.summary
                     let displayCwd = summary.cwd ?? defaultCwd
-                    NavigationLink(value: NavigationDestination.session(summary.id)) {
-                        SessionRow(
-                            title: summary.title ?? "New Chat",
-                            lastMessage: model.selectedServerId.flatMap {
-                                model.getLastMessagePreview(for: $0, sessionId: summary.id)
-                            },
-                            cwd: displayCwd,
-                            isActive: session.isActive,
-                            showCwd: false
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    sessionDestinationTrigger(
+                        summary,
+                        displayCwd: displayCwd,
+                        isActive: session.isActive,
+                        showCwd: false
+                    )
                 }
 
                 if hasMore {
-                    NavigationLink(value: NavigationDestination.folderSessions(
+                    destinationTrigger(.folderSessions(
                         path: group.path,
                         displayName: group.displayName
                     )) {
@@ -870,7 +1117,6 @@ private struct SessionListPage: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .modifier(SessionCardStyle())
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("showMoreFolder_\(group.path)")
                 }
             }
@@ -1119,49 +1365,75 @@ private struct NewSessionSheet: View {
     let onCreate: () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
+    @ViewBuilder
+    private var contentForm: some View {
+#if os(macOS)
+        ScrollView {
+            Form {
+                formSections
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: 680)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+        }
+#else
+        Form {
+            formSections
+        }
+#endif
+    }
+
+    @ViewBuilder
+    private var formSections: some View {
+        Section {
+            TextField("Working directory", text: $workingDirectory)
+#if os(iOS)
+                .textInputAutocapitalization(.never)
+#endif
+                .disableAutocorrection(true)
+                .font(.system(.body, design: .monospaced))
+        } header: {
+            Text("Working Directory")
+        } footer: {
+            Text("The directory where the agent will operate for this session.")
+        }
+
+        let trimmedCurrent = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let history = usedWorkingDirectories.filter { $0 != trimmedCurrent }
+        if !history.isEmpty {
+            Section {
+                ForEach(history, id: \.self) { directory in
+                    Button {
+                        workingDirectory = directory
+                    } label: {
+                        HStack {
+                            Image(systemName: "folder")
+                                .foregroundStyle(.secondary)
+                            Text(directory)
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("Previously Used")
+            } footer: {
+                Text("Tap to fill the working directory.")
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Working directory", text: $workingDirectory)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                        .font(.body.monospaced())
-                } header: {
-                    Text("Working Directory")
-                } footer: {
-                    Text("The directory where the agent will operate for this session.")
-                }
-
-                let trimmedCurrent = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
-                let history = usedWorkingDirectories.filter { $0 != trimmedCurrent }
-                if !history.isEmpty {
-                    Section {
-                        ForEach(history, id: \.self) { directory in
-                            Button {
-                                workingDirectory = directory
-                            } label: {
-                                HStack {
-                                    Image(systemName: "folder")
-                                        .foregroundStyle(.secondary)
-                                    Text(directory)
-                                        .font(.body.monospaced())
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                    Spacer()
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    } header: {
-                        Text("Previously Used")
-                    } footer: {
-                        Text("Tap to fill the working directory.")
-                    }
-                }
-            }
+            contentForm
             .navigationTitle("New Session")
+#if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+#endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
@@ -1172,7 +1444,11 @@ private struct NewSessionSheet: View {
                 }
             }
         }
+#if os(macOS)
+        .frame(minWidth: 700, idealWidth: 760, minHeight: 430, idealHeight: 520)
+#else
         .presentationDetents([.medium])
+#endif
     }
 }
 
@@ -1211,7 +1487,9 @@ private struct DeveloperLogsView: View {
             }
         }
         .navigationTitle("Server Logs")
+#if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+#endif
         .background(Color(.systemGroupedBackground))
     }
 }
@@ -1286,7 +1564,9 @@ private struct FolderSessionsView: View {
     @ObservedObject var model: AppViewModel
     let folderPath: String
     let folderDisplayName: String
+    @Binding var splitSelection: NavigationDestination?
     @State private var searchText: String = ""
+    @Environment(\.openWindow) private var openWindow
 
     private var sessionsInFolder: [SessionDisplay] {
         let activeId = model.serverIsStreaming ? model.serverSessionId : nil
@@ -1347,6 +1627,76 @@ private struct FolderSessionsView: View {
         }
     }
 
+    private func navigate(to destination: NavigationDestination) {
+#if os(macOS)
+        splitSelection = destination
+#endif
+    }
+
+    #if os(macOS)
+    private func sessionWindowKey(for sessionId: String) -> String {
+        let serverId = model.selectedServerId?.uuidString ?? "unknown-server"
+        return "\(serverId)::\(sessionId)"
+    }
+
+    private func openSessionInNewWindow(_ sessionId: String) {
+        model.openSession(sessionId)
+
+        if let serverViewModel = model.selectedServerViewModel,
+           serverViewModel.selectedSessionId == sessionId,
+           let sessionViewModel = serverViewModel.currentSessionViewModel {
+            let title = model.serverSessionSummaries.first(where: { $0.id == sessionId })?.title ?? "Session"
+            let payload = SessionWindowPayload(
+                model: model,
+                sessionId: sessionId,
+                title: title,
+                acpServerViewModel: serverViewModel,
+                codexServerViewModel: nil,
+                sessionViewModel: sessionViewModel
+            )
+            let key = SessionWindowStore.shared.store(payload, for: sessionWindowKey(for: sessionId))
+            openWindow(id: SessionWindowStore.windowId, value: key)
+            return
+        }
+
+        if let codexViewModel = model.selectedCodexServerViewModel,
+           codexViewModel.selectedSessionId == sessionId,
+           let sessionViewModel = codexViewModel.currentSessionViewModel {
+            let title = model.serverSessionSummaries.first(where: { $0.id == sessionId })?.title ?? "Session"
+            let payload = SessionWindowPayload(
+                model: model,
+                sessionId: sessionId,
+                title: title,
+                acpServerViewModel: nil,
+                codexServerViewModel: codexViewModel,
+                sessionViewModel: sessionViewModel
+            )
+            let key = SessionWindowStore.shared.store(payload, for: sessionWindowKey(for: sessionId))
+            openWindow(id: SessionWindowStore.windowId, value: key)
+        }
+    }
+    #endif
+
+    @ViewBuilder
+    private func destinationTrigger<Label: View>(
+        _ destination: NavigationDestination,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+#if os(macOS)
+        Button {
+            navigate(to: destination)
+        } label: {
+            label()
+        }
+        .buttonStyle(.plain)
+#else
+        NavigationLink(value: destination) {
+            label()
+        }
+        .buttonStyle(.plain)
+#endif
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -1358,9 +1708,13 @@ private struct FolderSessionsView: View {
             .padding(.vertical, 8)
         }
         .navigationTitle(folderDisplayName)
+#if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+#endif
         .searchable(text: $searchText, prompt: "Search sessions")
+#if os(iOS)
         .textInputAutocapitalization(.never)
+#endif
         .disableAutocorrection(true)
     }
 
@@ -1401,7 +1755,7 @@ private struct FolderSessionsView: View {
 
     private func folderSessionRow(_ session: SessionDisplay) -> some View {
         let summary = session.summary
-        return NavigationLink(value: NavigationDestination.session(summary.id)) {
+        return destinationTrigger(.session(summary.id)) {
             SessionRow(
                 title: summary.title ?? "New Chat",
                 lastMessage: model.selectedServerId.flatMap {
@@ -1412,7 +1766,19 @@ private struct FolderSessionsView: View {
                 showCwd: false
             )
         }
-        .buttonStyle(.plain)
+#if os(macOS)
+        .contextMenu {
+            if model.canArchiveSessions {
+                Button("Archive Session") {
+                    model.archiveSession(summary.id)
+                }
+            }
+
+            Button("Open in New Window") {
+                openSessionInNewWindow(summary.id)
+            }
+        }
+#endif
     }
 }
 

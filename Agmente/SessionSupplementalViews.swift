@@ -307,6 +307,10 @@ struct ShimmeringBubble: View {
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(.secondary)
+#if os(macOS)
+                .controlSize(.small)
+                .scaleEffect(0.8)
+#endif
             Text(text)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -382,8 +386,8 @@ struct UserBubble: View {
             VStack(alignment: .trailing, spacing: 6) {
                 if !images.isEmpty {
                     HStack(spacing: 6) {
-                        ForEach(images) { imageData in
-                            Image(uiImage: imageData.thumbnail)
+                        ForEach(images, id: \.id) { imageData in
+                            Image(platformImage: imageData.thumbnail)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 80, height: 80)

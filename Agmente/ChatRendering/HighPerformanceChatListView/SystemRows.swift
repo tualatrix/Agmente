@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 
 final class SystemRowView: BaseRowView {
@@ -101,3 +102,4 @@ final class StreamingIndicatorRowView: BaseRowView {
         )
     }
 }
+#endif
