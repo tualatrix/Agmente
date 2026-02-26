@@ -129,7 +129,7 @@ struct UserInputQuestionsSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Page indicator
                 if questions.count > 1 {
@@ -154,6 +154,7 @@ struct UserInputQuestionsSheet: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .navigationTitle("Plan Mode Question")
 #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -168,8 +169,12 @@ struct UserInputQuestionsSheet: View {
                 }
             }
         }
+#if os(macOS)
+        .frame(minWidth: 680, idealWidth: 760, minHeight: 560, idealHeight: 680)
+#else
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+#endif
     }
 
     // MARK: - Page Indicator
