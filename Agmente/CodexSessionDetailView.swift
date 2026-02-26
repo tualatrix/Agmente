@@ -457,7 +457,7 @@ private extension CodexSessionDetailView {
 
                 Button {
                     if serverViewModel.isStreaming {
-                        // Cancel not supported for Codex yet
+                        serverViewModel.interruptActiveTurn()
                     } else {
                         sendPrompt()
                     }
