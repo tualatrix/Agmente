@@ -386,7 +386,7 @@ private extension CodexSessionDetailView {
             && !serverViewModel.sessionId.isEmpty
             && !serverViewModel.isStreaming
             && (hasPrompt || hasImages || hasCommand)
-        let canCancelPrompt = serverViewModel.isStreaming && !serverViewModel.sessionId.isEmpty
+        let canCancelPrompt = serverViewModel.canInterruptActiveTurn
 
         return VStack(alignment: .leading, spacing: 8) {
             // Model picker, plan mode toggle, skills picker, permissions, and command picker row
@@ -487,7 +487,7 @@ private extension CodexSessionDetailView {
                         sendPrompt()
                     }
                 } label: {
-                    let isStreaming = serverViewModel.isStreaming
+                    let isStreaming = serverViewModel.canInterruptActiveTurn
                     let isConnected = model.connectionState == .connected
                     Image(systemName: isStreaming ? "stop.fill" : "paperplane.fill")
                         .font(.headline.weight(.bold))
@@ -504,7 +504,7 @@ private extension CodexSessionDetailView {
                 }
                 .disabled(!canSendPrompt && !canCancelPrompt)
                 .buttonStyle(.plain)
-                .accessibilityLabel(serverViewModel.isStreaming ? "Stop" : "Send")
+                .accessibilityLabel(serverViewModel.canInterruptActiveTurn ? "Stop" : "Send")
                 .accessibilityIdentifier("codexSendButton")
             }
         }

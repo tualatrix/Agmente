@@ -37,6 +37,7 @@ SwiftUI app layer and protocol routing logic:
 - Session/thread list parsing changes must preserve ordering and metadata consistency.
 - Open-session behavior must not regress summary metadata or current working directory display.
 - Reconnect/background-resume changes must verify active-thread resubscription, streaming indicator state, and stop/send button behavior.
+- For Codex, stop/send availability must follow active turn state, not only the presence of a streaming assistant row.
 - Add-server form or summary dialog changes must keep ACP and Codex messaging clearly separated.
 
 ## Contribution Checklist

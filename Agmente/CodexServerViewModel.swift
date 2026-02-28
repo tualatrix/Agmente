@@ -57,7 +57,24 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
     }
 
     var isStreaming: Bool {
-        return hasStreamingAssistantMessage(in: selectedSessionId)
+        hasStreamingAssistantMessage(in: selectedSessionId) || canInterruptActiveTurn
+    }
+
+    var canInterruptActiveTurn: Bool {
+        guard connectionState == .connected else { return false }
+        guard let activeTurnId, !activeTurnId.isEmpty else { return false }
+
+        let currentThreadId = firstNonEmptyOptionalString(
+            selectedSessionId,
+            sessionId.isEmpty ? nil : sessionId
+        )
+        guard let currentThreadId, !currentThreadId.isEmpty else { return false }
+
+        if let activeThreadId, !activeThreadId.isEmpty, activeThreadId != currentThreadId {
+            return false
+        }
+
+        return true
     }
 
     var isPendingSession: Bool {

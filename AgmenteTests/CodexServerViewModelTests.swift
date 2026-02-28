@@ -334,6 +334,57 @@ final class CodexServerViewModelTests: XCTestCase {
         XCTAssertEqual(codexVM.currentSessionViewModel?.chatMessages.last?.isStreaming, false)
     }
 
+    func testCodexServerViewModel_ActiveTurnRemainsInterruptibleWithoutStreamingRow() {
+        let model = makeModel()
+        addServer(to: model)
+
+        let service = makeService()
+        let initRequest = ACP.AnyRequest(id: .int(1), method: "initialize", params: nil)
+        model.acpService(service, willSend: initRequest)
+        let result: ACP.Value = .object([
+            "userAgent": .string("codex/1.0.0"),
+        ])
+        model.acpService(service, didReceiveMessage: .response(ACP.AnyResponse(id: .int(1), result: result)))
+
+        guard let codexVM = model.selectedCodexServerViewModel else {
+            XCTFail("Expected CodexServerViewModel")
+            return
+        }
+
+        codexVM.setActiveSession("thread-stop", cwd: "/workspace", modes: nil)
+        model.setServiceForTesting(service)
+
+        let turnStarted = JSONRPCMessage.notification(
+            JSONRPCNotification(
+                method: "turn/started",
+                params: .object([
+                    "threadId": .string("thread-stop"),
+                    "turn": .object(["id": .string("turn-stop-1")]),
+                ])
+            )
+        )
+        codexVM.handleCodexMessage(turnStarted)
+
+        codexVM.currentSessionViewModel?.bindStreamingAssistantMessage(to: nil)
+
+        XCTAssertTrue(codexVM.canInterruptActiveTurn, "Active turn should stay interruptible even without a streaming row")
+        XCTAssertTrue(codexVM.isStreaming, "Composer should remain in stop state while the turn is active")
+
+        let turnCompleted = JSONRPCMessage.notification(
+            JSONRPCNotification(
+                method: "turn/completed",
+                params: .object([
+                    "threadId": .string("thread-stop"),
+                    "turn": .object(["id": .string("turn-stop-1")]),
+                ])
+            )
+        )
+        codexVM.handleCodexMessage(turnCompleted)
+
+        XCTAssertFalse(codexVM.canInterruptActiveTurn)
+        XCTAssertFalse(codexVM.isStreaming)
+    }
+
     /// Reconnect races can leave a stale active turn ID; incoming deltas should realign instead of being dropped.
     func testCodexServerViewModel_ItemDeltaRealignsStaleActiveTurn() {
         let model = makeModel()
