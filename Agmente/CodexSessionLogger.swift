@@ -2,6 +2,18 @@ import Foundation
 import ACPClient
 
 actor CodexSessionLogger {
+
+    // MARK: - Log Level
+
+    enum LogLevel: Int, Comparable {
+        case standard = 0
+        case verbose = 1
+
+        static func < (lhs: LogLevel, rhs: LogLevel) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
+    }
+
     struct Entry: Encodable {
         let ts: String
         let type: String
@@ -23,6 +35,44 @@ actor CodexSessionLogger {
         let endpoint: String?
     }
 
+    /// Extended entry for diagnostic events (connection, merge, snapshot, render).
+    struct DiagnosticEntry: Encodable {
+        let ts: String
+        let type: String
+        let sessionId: String?
+        let event: String?
+        let source: String?
+        let detail: String?
+        let endpoint: String?
+        let stats: DiagnosticStats?
+        let messages: [MessageSnapshot]?
+    }
+
+    struct DiagnosticStats: Encodable {
+        let reused: Int?
+        let inserted: Int?
+        let updated: Int?
+        let unchanged: Int?
+        let resumedTurns: Int?
+        let resumedItems: Int?
+        let staleDetected: Bool?
+        let preferLocalRichness: Bool?
+        let carryForwardUnmatched: Bool?
+        let localToolCalls: Int?
+        let resumedToolCalls: Int?
+    }
+
+    struct MessageSnapshot: Encodable {
+        let index: Int
+        let role: String
+        let isStreaming: Bool
+        let segmentCount: Int
+        let segmentKinds: String
+        let toolCallCount: Int
+        let contentPreview: String
+        let messageId: String
+    }
+
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.withoutEscapingSlashes]
@@ -42,14 +92,16 @@ actor CodexSessionLogger {
         return formatter
     }()
 
-    private let logDirectoryURL: URL
+    nonisolated let logDirectoryURL: URL
     private let maxFiles: Int
+    private(set) var logLevel: LogLevel
     private var currentSessionId: String?
     private var currentFileURL: URL?
     private var fileHandle: FileHandle?
 
-    init(maxFiles: Int = 3) {
+    init(maxFiles: Int = 5, logLevel: LogLevel = .verbose) {
         self.maxFiles = maxFiles
+        self.logLevel = logLevel
         let base = (try? FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -267,6 +319,150 @@ actor CodexSessionLogger {
         ))
     }
 
+    // MARK: - Diagnostic Logging (Connection / Merge / Snapshot / Render)
+
+    /// Log a connection lifecycle event.
+    func logConnectionEvent(
+        event: String,
+        sessionId: String?,
+        endpoint: String?,
+        detail: String? = nil
+    ) {
+        writeDiagnostic(DiagnosticEntry(
+            ts: timestampString(),
+            type: "connection",
+            sessionId: sessionId,
+            event: event,
+            source: nil,
+            detail: detail,
+            endpoint: endpoint,
+            stats: nil,
+            messages: nil
+        ))
+    }
+
+    /// Log the outcome of a merge operation after reconnect/resume.
+    func logMergeOutcome(
+        sessionId: String?,
+        source: String,
+        reused: Int,
+        inserted: Int,
+        updated: Int,
+        unchanged: Int,
+        resumedTurns: Int,
+        resumedItems: Int,
+        staleDetected: Bool,
+        preferLocalRichness: Bool,
+        carryForwardUnmatched: Bool,
+        localToolCalls: Int,
+        resumedToolCalls: Int,
+        detail: String? = nil
+    ) {
+        writeDiagnostic(DiagnosticEntry(
+            ts: timestampString(),
+            type: "merge_outcome",
+            sessionId: sessionId,
+            event: nil,
+            source: source,
+            detail: detail,
+            endpoint: nil,
+            stats: DiagnosticStats(
+                reused: reused,
+                inserted: inserted,
+                updated: updated,
+                unchanged: unchanged,
+                resumedTurns: resumedTurns,
+                resumedItems: resumedItems,
+                staleDetected: staleDetected,
+                preferLocalRichness: preferLocalRichness,
+                carryForwardUnmatched: carryForwardUnmatched,
+                localToolCalls: localToolCalls,
+                resumedToolCalls: resumedToolCalls
+            ),
+            messages: nil
+        ))
+    }
+
+    /// Log a chat message snapshot (pre/post merge). Verbose-level only.
+    func logChatSnapshot(
+        sessionId: String?,
+        label: String,
+        messages: [MessageSnapshot]
+    ) {
+        guard logLevel >= .verbose else { return }
+        writeDiagnostic(DiagnosticEntry(
+            ts: timestampString(),
+            type: "chat_snapshot",
+            sessionId: sessionId,
+            event: label,
+            source: nil,
+            detail: nil,
+            endpoint: nil,
+            stats: nil,
+            messages: messages
+        ))
+    }
+
+    /// Log a UI rendering decision (thought grouping, carry-forward insertion). Verbose-level only.
+    func logRenderDecision(
+        sessionId: String?,
+        event: String,
+        detail: String
+    ) {
+        guard logLevel >= .verbose else { return }
+        writeDiagnostic(DiagnosticEntry(
+            ts: timestampString(),
+            type: "render_decision",
+            sessionId: sessionId,
+            event: event,
+            source: nil,
+            detail: detail,
+            endpoint: nil,
+            stats: nil,
+            messages: nil
+        ))
+    }
+
+    func setLogLevel(_ level: LogLevel) {
+        logLevel = level
+    }
+
+    /// Delete all JSONL log files and close the current session file handle.
+    func deleteAllLogs() {
+        closeFile()
+        currentSessionId = nil
+        currentFileURL = nil
+
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: logDirectoryURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return }
+        for file in files where file.pathExtension == "jsonl" {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    // MARK: - Log File Collection (for export)
+
+    /// Returns URLs of all JSONL log files sorted newest-first.
+    nonisolated func collectLogFileURLs() -> [URL] {
+        let keys: [URLResourceKey] = [.creationDateKey]
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: logDirectoryURL,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+        let logFiles = files.filter {
+            $0.lastPathComponent.hasPrefix("codex-session-") && $0.pathExtension == "jsonl"
+        }
+        return logFiles.sorted { lhs, rhs in
+            let lhsDate = (try? lhs.resourceValues(forKeys: Set(keys)).creationDate) ?? .distantPast
+            let rhsDate = (try? rhs.resourceValues(forKeys: Set(keys)).creationDate) ?? .distantPast
+            return lhsDate > rhsDate
+        }
+    }
+
     private func endCurrentSession() {
         guard let sessionId = currentSessionId else {
             closeFile()
@@ -304,6 +500,19 @@ actor CodexSessionLogger {
     }
 
     private func write(_ entry: Entry) {
+        guard let fileHandle else { return }
+        guard let data = try? encoder.encode(entry) else { return }
+        var line = data
+        line.append(0x0A)
+        do {
+            try fileHandle.seekToEnd()
+            try fileHandle.write(contentsOf: line)
+        } catch {
+            // Best-effort logging.
+        }
+    }
+
+    private func writeDiagnostic(_ entry: DiagnosticEntry) {
         guard let fileHandle else { return }
         guard let data = try? encoder.encode(entry) else { return }
         var line = data

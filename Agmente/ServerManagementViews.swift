@@ -22,15 +22,18 @@ struct AddServerView: View {
     @State private var hasAttemptedSave = false
 
     let editingServer: ACPServerConfiguration?
+    let initialServerType: ServerType?
     let onValidate: (String, String, String, String, String, String, String, ServerType) async -> Result<ValidatedServerConfiguration, Error>
     let onInsert: (ValidatedServerConfiguration) -> Void
 
     init(
         editingServer: ACPServerConfiguration? = nil,
+        initialServerType: ServerType? = nil,
         onValidate: @escaping (String, String, String, String, String, String, String, ServerType) async -> Result<ValidatedServerConfiguration, Error>,
         onInsert: @escaping (ValidatedServerConfiguration) -> Void
     ) {
         self.editingServer = editingServer
+        self.initialServerType = initialServerType
         self.onValidate = onValidate
         self.onInsert = onInsert
 
@@ -41,7 +44,7 @@ struct AddServerView: View {
         _cfAccessClientId = State(initialValue: editingServer?.cfAccessClientId ?? "")
         _cfAccessClientSecret = State(initialValue: editingServer?.cfAccessClientSecret ?? "")
         _workingDirectory = State(initialValue: editingServer?.workingDirectory ?? "")
-        _serverType = State(initialValue: editingServer?.serverType ?? .acp)
+        _serverType = State(initialValue: editingServer?.serverType ?? initialServerType ?? .acp)
         _showCloudflareAccess = State(initialValue: !(editingServer?.cfAccessClientId ?? "").isEmpty)
     }
 
@@ -90,9 +93,8 @@ struct AddServerView: View {
                 Text("Codex")
                     .tag(ServerType.codexAppServer)
                     .accessibilityIdentifier("ServerTypeCodex")
-                    .accessibilityLabel("Codex App-Server")
+                    .accessibilityLabel("Codex App Server")
             }
-            .pickerStyle(.segmented)
             .accessibilityIdentifier("ServerTypePicker")
         } footer: {
             Text(serverType.description)

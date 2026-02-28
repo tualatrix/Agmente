@@ -193,7 +193,10 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
     private let encoder = JSONEncoder()
     private var pendingRequests: [ACP.ID: String] = [:]
     private var codexAckNeeded: Set<UUID> = []
-    private let codexSessionLogger = CodexSessionLogger(maxFiles: 3)
+    private let codexSessionLogger = CodexSessionLogger(maxFiles: 5)
+
+    /// Public accessor for log export in SettingsView.
+    var codexSessionLoggerForExport: CodexSessionLogger { codexSessionLogger }
     private var pendingSessionLoad: (serverId: UUID, sessionId: String)?
     /// Capability flags are sourced from AgentProfile (protocol payloads) and updated on errors.
     /// Tracks pending permission requests by request ID -> (sessionId, toolCallId)
@@ -229,6 +232,15 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
     private func debugLog(_ message: String) {
         guard devModeEnabled else { return }
         append("[debug] \(message)")
+    }
+
+    /// Log a connection lifecycle event to the Codex session logger (if active and enabled).
+    private func logCodexConnectionEvent(_ event: String, detail: String? = nil) {
+        guard codexSessionLoggingEnabled else { return }
+        let codexVM = selectedCodexServerViewModel
+        let sessionId = codexVM?.selectedSessionId ?? codexVM?.sessionId
+        let endpoint = codexVM?.endpointURLString
+        Task { await codexSessionLogger.logConnectionEvent(event: event, sessionId: sessionId, endpoint: endpoint, detail: detail) }
     }
 
     private func debugLogSessionStats(label: String, sessions: [SessionSummary]) {
@@ -1602,6 +1614,8 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
         }
         lastResumeRefreshAt = now
 
+        logCodexConnectionEvent("reconnect_attempt")
+
         resumeRefreshTask?.cancel()
         resumeRefreshTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -2093,13 +2107,16 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
         append("State: \(stateLabel(state))")
         switch state {
         case .connected:
+            logCodexConnectionEvent("connection_established")
             if pendingNetworkRefresh {
                 pendingNetworkRefresh = false
                 resumeConnectionIfNeeded()
             }
         case .failed:
+            logCodexConnectionEvent("connection_failed")
             _ = serverLifecycleController.popPendingDisconnectServerId() ?? selectedServerId
         case .disconnected:
+            logCodexConnectionEvent("connection_lost")
             _ = serverLifecycleController.popPendingDisconnectServerId() ?? selectedServerId
         case .connecting:
             break
@@ -2598,13 +2615,13 @@ enum ServerType: String, CaseIterable, Equatable {
     var displayName: String {
         switch self {
         case .acp: return "ACP"
-        case .codexAppServer: return "Codex App-Server"
+        case .codexAppServer: return "Codex App Server"
         }
     }
 
     var description: String {
         switch self {
-        case .acp: return "Agent Client Protocol (Claude Code, Gemini CLI, etc.). Use Codex App-Server for OpenAI Codex."
+        case .acp: return "Agent Client Protocol (Claude Code, Gemini CLI, etc.). Use Codex App Server for OpenAI Codex."
         case .codexAppServer: return "OpenAI Codex app-server protocol"
         }
     }

@@ -704,6 +704,11 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
             logOpen(
                 "Resubscribe begin thread=\(activeId) existingMessages=\(existingMessages.count) hadStreaming=\(hadStreamingBeforeResume) likelyInFlight=\(likelyInFlightStreaming)"
             )
+            logDiagnosticConnectionEvent(
+                "resubscribe_started",
+                detail: "thread=\(activeId) existingMessages=\(existingMessages.count) hadStreaming=\(hadStreamingBeforeResume) likelyInFlight=\(likelyInFlightStreaming)"
+            )
+            logDiagnosticChatSnapshot(label: "pre_reconnect_merge", messages: existingMessages)
 
             do {
                 logOpen("Re-subscribing thread after reconnect: \(activeId)")
@@ -753,6 +758,21 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                 if staleResumeMissingActiveTurn {
                     trace(
                         "resubscribe skip merge reason=staleResumeMissingActiveTurn thread=\(activeId) localActiveTurn=\(activeTurnBeforeResume ?? "nil") resumedActiveTurn=\(result.activeTurnId ?? "nil") likelyInFlight=\(likelyInFlightStreaming) missingActiveTurnFromServer=\(missingActiveTurnFromServer)"
+                    )
+                    let staleMerge = ResumeMergeOutcome(
+                        resumedTurns: result.turns.count,
+                        resumedItems: resumedItems,
+                        reusedMessages: 0, insertedMessages: 0, updatedMessages: 0, unchangedMessages: 0
+                    )
+                    logDiagnosticMergeOutcome(
+                        source: hydrationSource,
+                        outcome: staleMerge,
+                        staleDetected: true,
+                        preferLocalRichness: false,
+                        carryForwardUnmatched: false,
+                        localToolCalls: countToolCallSegments(in: existingMessages),
+                        resumedToolCalls: 0,
+                        detail: "staleResumeMissingActiveTurn localActiveTurn=\(activeTurnBeforeResume ?? "nil")"
                     )
                     currentSessionViewModel?.setSessionContext(serverId: self.id, sessionId: activeId)
                     currentSessionViewModel?.saveChatState()
@@ -832,9 +852,21 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                 pendingSessionLoad = nil
                 trace("resubscribe end thread=\(activeId) chatMessages=\(currentSessionViewModel?.chatMessages.count ?? -1)")
                 logSessionSnapshot("resubscribe/end thread=\(activeId)")
+                logDiagnosticChatSnapshot(
+                    label: "post_reconnect_merge",
+                    messages: currentSessionViewModel?.chatMessages ?? []
+                )
+                logDiagnosticConnectionEvent(
+                    "resubscribe_completed",
+                    detail: "thread=\(activeId) chatMessages=\(currentSessionViewModel?.chatMessages.count ?? -1) source=\(hydrationSource)"
+                )
             } catch {
                 trace("resubscribe failed thread=\(activeId) error=\(error.localizedDescription)")
                 logOpen("Failed to re-subscribe thread: \(error.localizedDescription)")
+                logDiagnosticConnectionEvent(
+                    "resubscribe_failed",
+                    detail: "thread=\(activeId) error=\(error.localizedDescription)"
+                )
             }
         }
     }
@@ -1090,6 +1122,9 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
             existingMessageByKey[key] = message
         }
 
+        // Log pre-merge snapshot
+        logDiagnosticChatSnapshot(label: "pre_merge", messages: existingMessages)
+
         let localRenderableAssistantMessages = existingMessages.filter {
             $0.role == .assistant && Self.hasRenderableMessagePayload($0)
         }.count
@@ -1258,7 +1293,14 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                 guard !alreadyPresent else { continue }
 
                 let insertionIndex = insertionIndexAroundExistingIndex(existingIndex)
-                mergedMessages.insert(existing, at: max(0, min(insertionIndex, mergedMessages.count)))
+                let clampedIndex = max(0, min(insertionIndex, mergedMessages.count))
+                // Log carry-forward insertion for diagnostic purposes
+                let segKinds = existing.segments.map(\.kind.rawValue).joined(separator: ",")
+                logDiagnosticRenderDecision(
+                    event: "carry_forward_insert",
+                    detail: "existingIndex=\(existingIndex) insertionIndex=\(clampedIndex) role=\(existing.role.rawValue) segments=[\(segKinds)] id=\(existing.id.uuidString) mergedCount=\(mergedMessages.count)"
+                )
+                mergedMessages.insert(existing, at: clampedIndex)
                 mergedKeysById[existing.id] = existingKeysById[existing.id] ?? "local:\(existing.id.uuidString)"
                 reusedMessages += 1
                 unchangedMessages += 1
@@ -1271,14 +1313,10 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
             "merge end thread=\(result.id) mergedMessages=\(mergedMessages.count) reused=\(reusedMessages) inserted=\(insertedMessages) updated=\(updatedMessages) unchanged=\(unchangedMessages)"
         )
 
-        appendClosure(
-            "Codex thread history: turns=\(result.turns.count), items=\(stats.totalItems), user=\(stats.userMessages), agent=\(stats.agentMessages), reasoning=\(stats.reasoningItems), command=\(stats.commandItems), file=\(stats.fileChangeItems), unknown=\(stats.unknownItems), emptyUser=\(stats.emptyUserMessages), emptyAgent=\(stats.emptyAgentMessages)"
-        )
+        // Log post-merge snapshot and outcome
+        logDiagnosticChatSnapshot(label: "post_merge", messages: mergedMessages)
 
-        // Save merged state for offline access.
-        viewModel.saveChatState()
-
-        return ResumeMergeOutcome(
+        let mergeOutcome = ResumeMergeOutcome(
             resumedTurns: result.turns.count,
             resumedItems: stats.totalItems,
             reusedMessages: reusedMessages,
@@ -1286,6 +1324,37 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
             updatedMessages: updatedMessages,
             unchangedMessages: unchangedMessages
         )
+        logDiagnosticMergeOutcome(
+            source: "mergeChatFromThreadHistory",
+            outcome: mergeOutcome,
+            staleDetected: false,
+            preferLocalRichness: preferLocalRichness,
+            carryForwardUnmatched: shouldCarryForwardUnmatchedExisting,
+            localToolCalls: localToolCalls,
+            resumedToolCalls: resumedToolCalls
+        )
+
+        // Log thought/reasoning segment positions for rendering diagnosis
+        let thoughtPositions = mergedMessages.enumerated().compactMap { index, msg -> String? in
+            let thoughtSegments = msg.segments.filter { $0.kind == .thought }
+            guard !thoughtSegments.isEmpty else { return nil }
+            return "row=\(index) role=\(msg.role.rawValue) thoughts=\(thoughtSegments.count) streaming=\(msg.isStreaming)"
+        }
+        if !thoughtPositions.isEmpty {
+            logDiagnosticRenderDecision(
+                event: "thought_positions_after_merge",
+                detail: thoughtPositions.joined(separator: "; ")
+            )
+        }
+
+        appendClosure(
+            "Codex thread history: turns=\(result.turns.count), items=\(stats.totalItems), user=\(stats.userMessages), agent=\(stats.agentMessages), reasoning=\(stats.reasoningItems), command=\(stats.commandItems), file=\(stats.fileChangeItems), unknown=\(stats.unknownItems), emptyUser=\(stats.emptyUserMessages), emptyAgent=\(stats.emptyAgentMessages)"
+        )
+
+        // Save merged state for offline access.
+        viewModel.saveChatState()
+
+        return mergeOutcome
     }
 
     private static func isUserResumeItem(_ item: CodexThreadResumeResult.Item) -> Bool {
@@ -3228,6 +3297,83 @@ final class CodexServerViewModel: ObservableObject, Identifiable, ServerViewMode
                 "\(label) row=\(index) role=\(message.role.rawValue) state=\(streamState) id=\(message.id.uuidString) segments=\(message.segments.count) toolCalls=\(toolCallCount) kinds=[\(segmentKinds)] text=\"\(preview)\""
             )
         }
+    }
+
+    // MARK: - Diagnostic Session Logging Helpers
+
+    private func buildMessageSnapshots(_ messages: [ChatMessage]) -> [CodexSessionLogger.MessageSnapshot] {
+        messages.enumerated().map { index, message in
+            let segmentKinds = message.segments.map(\.kind.rawValue).joined(separator: ",")
+            let toolCallCount = message.segments.filter { $0.kind == .toolCall }.count
+            let preview = logPreview(message.content, limit: 200)
+            return CodexSessionLogger.MessageSnapshot(
+                index: index,
+                role: message.role.rawValue,
+                isStreaming: message.isStreaming,
+                segmentCount: message.segments.count,
+                segmentKinds: segmentKinds,
+                toolCallCount: toolCallCount,
+                contentPreview: preview,
+                messageId: message.id.uuidString
+            )
+        }
+    }
+
+    private func diagnosticSessionId() -> String? {
+        let activeId = sessionId.isEmpty ? selectedSessionId : sessionId
+        return activeId?.isEmpty == true ? nil : activeId
+    }
+
+    private func logDiagnosticConnectionEvent(_ event: String, detail: String? = nil) {
+        guard let logger = sessionLogger, isSessionLoggingEnabled() else { return }
+        let sid = diagnosticSessionId()
+        let ep = endpointURLString
+        Task { await logger.logConnectionEvent(event: event, sessionId: sid, endpoint: ep, detail: detail) }
+    }
+
+    private func logDiagnosticChatSnapshot(label: String, messages: [ChatMessage]) {
+        guard let logger = sessionLogger, isSessionLoggingEnabled() else { return }
+        let sid = diagnosticSessionId()
+        let snapshots = buildMessageSnapshots(messages)
+        Task { await logger.logChatSnapshot(sessionId: sid, label: label, messages: snapshots) }
+    }
+
+    private func logDiagnosticMergeOutcome(
+        source: String,
+        outcome: ResumeMergeOutcome,
+        staleDetected: Bool,
+        preferLocalRichness: Bool,
+        carryForwardUnmatched: Bool,
+        localToolCalls: Int,
+        resumedToolCalls: Int,
+        detail: String? = nil
+    ) {
+        guard let logger = sessionLogger, isSessionLoggingEnabled() else { return }
+        let sid = diagnosticSessionId()
+        Task {
+            await logger.logMergeOutcome(
+                sessionId: sid,
+                source: source,
+                reused: outcome.reusedMessages,
+                inserted: outcome.insertedMessages,
+                updated: outcome.updatedMessages,
+                unchanged: outcome.unchangedMessages,
+                resumedTurns: outcome.resumedTurns,
+                resumedItems: outcome.resumedItems,
+                staleDetected: staleDetected,
+                preferLocalRichness: preferLocalRichness,
+                carryForwardUnmatched: carryForwardUnmatched,
+                localToolCalls: localToolCalls,
+                resumedToolCalls: resumedToolCalls,
+                detail: detail
+            )
+        }
+    }
+
+    private func logDiagnosticRenderDecision(event: String, detail: String) {
+        guard let logger = sessionLogger, isSessionLoggingEnabled() else { return }
+        let sid = diagnosticSessionId()
+        Task { await logger.logRenderDecision(sessionId: sid, event: event, detail: detail) }
     }
 
     /// Handle incoming approval request from Codex app-server.

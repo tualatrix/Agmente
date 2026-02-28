@@ -6,7 +6,7 @@ private let healthyGreen = Color(.sRGB, red: 73/255, green: 210/255, blue: 123/2
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var model = AppViewModel()
-    @State private var showingAddServer = false
+    @State private var addServerSheet: AddServerSheet?
     @State private var showingSettings = false
     @State private var navigationPath: [NavigationDestination] = []
     @State private var splitSelection: NavigationDestination?
@@ -41,7 +41,7 @@ struct ContentView: View {
 
     var body: some View {
         containerView
-        .sheet(isPresented: $showingAddServer, content: addServerSheet)
+        .sheet(item: $addServerSheet, content: addServerSheet)
         .sheet(item: $serverToEdit, content: editServerSheet)
         .sheet(isPresented: $showingSettings, content: settingsSheet)
         .onChange(of: scenePhase) { _, newPhase in
@@ -151,7 +151,7 @@ private extension ContentView {
     @ViewBuilder
     var rootContent: some View {
         if model.selectedServerId == nil {
-            SessionPlaceholderView(onAddServer: { showingAddServer = true })
+            SessionPlaceholderView(onAddServer: { addServerSheet = .acp })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
                 .background(Color(.systemGroupedBackground))
@@ -170,7 +170,7 @@ private extension ContentView {
         if let selection = splitSelection {
             destinationView(selection)
         } else {
-            SessionPlaceholderView(onAddServer: { showingAddServer = true })
+            SessionPlaceholderView(onAddServer: { addServerSheet = .acp })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
                 .background(Color(.systemGroupedBackground))
@@ -227,8 +227,9 @@ private extension ContentView {
         }
     }
 
-    func addServerSheet() -> some View {
+    func addServerSheet(_ sheet: AddServerSheet) -> some View {
         AddServerView(
+            initialServerType: sheet.serverType,
             onValidate: { name, scheme, host, token, cfAccessClientId, cfAccessClientSecret, workingDirectory, serverType in
                 await model.validateServerConfiguration(
                     name: name,
@@ -272,7 +273,8 @@ private extension ContentView {
         SettingsView(
             devModeEnabled: $model.devModeEnabled,
             codexSessionLoggingEnabled: $model.codexSessionLoggingEnabled,
-            useHighPerformanceChatRenderer: $model.useHighPerformanceChatRenderer
+            useHighPerformanceChatRenderer: $model.useHighPerformanceChatRenderer,
+            sessionLogger: model.codexSessionLoggerForExport
         )
     }
 
@@ -295,11 +297,18 @@ private extension ContentView {
                 }
                 Divider()
                 Button {
-                    showingAddServer = true
+                    addServerSheet = .acp
                 } label: {
-                    Label("Add Server", systemImage: "plus")
+                    Label("Add ACP Server", systemImage: "plus")
                 }
-                .accessibilityIdentifier("addServerMenuAction")
+                .accessibilityIdentifier("addACPServerMenuAction")
+
+                Button {
+                    addServerSheet = .codexAppServer
+                } label: {
+                    Label("Add Codex App Server", systemImage: "plus")
+                }
+                .accessibilityIdentifier("addCodexServerMenuAction")
             } label: {
                 if #available(iOS 26.0, macOS 26.0, *) {
                     HStack(spacing: 10) {
@@ -377,6 +386,22 @@ private extension ContentView {
                 Label("More", systemImage: "ellipsis")
             }
             .accessibilityIdentifier("moreMenuButton")
+        }
+    }
+}
+
+private enum AddServerSheet: String, Identifiable {
+    case acp
+    case codexAppServer
+
+    var id: String { rawValue }
+
+    var serverType: ServerType {
+        switch self {
+        case .acp:
+            return .acp
+        case .codexAppServer:
+            return .codexAppServer
         }
     }
 }
