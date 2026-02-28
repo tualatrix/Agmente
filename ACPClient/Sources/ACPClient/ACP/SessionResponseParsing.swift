@@ -13,11 +13,20 @@ public struct ACPSessionNewResult: Sendable, Equatable {
     
     /// Mode information if returned by the server.
     public let modes: ACPModesInfo?
-    
-    public init(sessionId: String, cwd: String? = nil, modes: ACPModesInfo? = nil) {
+
+    /// Session config options if returned by the server.
+    public let configOptions: [ACPSessionConfigOption]
+
+    public init(
+        sessionId: String,
+        cwd: String? = nil,
+        modes: ACPModesInfo? = nil,
+        configOptions: [ACPSessionConfigOption] = []
+    ) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.modes = modes
+        self.configOptions = configOptions
     }
 }
 
@@ -31,14 +40,24 @@ public struct ACPSessionLoadResult: Sendable, Equatable {
     
     /// Mode information if returned by the server.
     public let modes: ACPModesInfo?
+
+    /// Session config options if returned by the server.
+    public let configOptions: [ACPSessionConfigOption]
     
     /// Chat history if returned by the server.
     public let history: [ACPHistoryMessage]?
     
-    public init(sessionId: String, cwd: String? = nil, modes: ACPModesInfo? = nil, history: [ACPHistoryMessage]? = nil) {
+    public init(
+        sessionId: String,
+        cwd: String? = nil,
+        modes: ACPModesInfo? = nil,
+        configOptions: [ACPSessionConfigOption] = [],
+        history: [ACPHistoryMessage]? = nil
+    ) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.modes = modes
+        self.configOptions = configOptions
         self.history = history
     }
 }
@@ -127,9 +146,10 @@ public enum ACPSessionResponseParser {
             ?? fallbackCwd
         
         // Parse modes
-        let modes = parseModes(from: resultDict)
+        let configOptions = ACPSessionConfigOptionParser.parse(from: resultDict)
+        let modes = parseModes(from: resultDict) ?? ACPSessionConfigOptionParser.modeInfo(from: configOptions)
         
-        return ACPSessionNewResult(sessionId: sessionId, cwd: cwd, modes: modes)
+        return ACPSessionNewResult(sessionId: sessionId, cwd: cwd, modes: modes, configOptions: configOptions)
     }
     
     // MARK: - Session Load/Resume
@@ -156,12 +176,19 @@ public enum ACPSessionResponseParser {
             ?? resultDict?["workingDirectory"]?.stringValue
         
         // Parse modes
-        let modes = parseModes(from: resultDict)
+        let configOptions = ACPSessionConfigOptionParser.parse(from: resultDict)
+        let modes = parseModes(from: resultDict) ?? ACPSessionConfigOptionParser.modeInfo(from: configOptions)
         
         // Parse history if present
         let history = parseHistory(from: resultDict)
         
-        return ACPSessionLoadResult(sessionId: sessionId, cwd: cwd, modes: modes, history: history)
+        return ACPSessionLoadResult(
+            sessionId: sessionId,
+            cwd: cwd,
+            modes: modes,
+            configOptions: configOptions,
+            history: history
+        )
     }
     
     // MARK: - Session Set Mode
@@ -178,6 +205,10 @@ public enum ACPSessionResponseParser {
         guard let modeId else { return nil }
         
         return ACPSetModeResult(currentModeId: modeId)
+    }
+
+    public static func parseConfigOptions(result: ACP.Value?) -> [ACPSessionConfigOption] {
+        ACPSessionConfigOptionParser.parse(from: result?.objectValue)
     }
     
     // MARK: - Helpers

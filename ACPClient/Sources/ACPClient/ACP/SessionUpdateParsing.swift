@@ -43,6 +43,9 @@ public enum ACPSessionUpdateParser {
                 if let mode = update["modeId"]?.stringValue {
                     return "session/update [\(session)] mode -> \(mode)"
                 }
+            case "config_option_update":
+                let options = ACPSessionConfigOptionParser.parse(from: update)
+                return "session/update [\(session)] config options updated (\(options.count))"
             default:
                 break
             }

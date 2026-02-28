@@ -627,13 +627,15 @@ final class ServerViewModel: ObservableObject, Identifiable, ServerViewModelProt
         if let modes = modes {
             availableModes = modes.availableModes
             defaultModeId = modes.currentModeId
-            currentSessionViewModel?.setCurrentModeId(modes.currentModeId)
+            currentSessionViewModel?.setAvailableModes(modes.availableModes, currentModeId: modes.currentModeId)
             currentSessionViewModel?.cacheCurrentMode(serverId: self.id, sessionId: id)
         } else if let cachedMode = currentSessionViewModel?.cachedMode(for: self.id, sessionId: id) {
             currentSessionViewModel?.setCurrentModeId(cachedMode)
+            currentSessionViewModel?.setAvailableModes(availableModes, currentModeId: cachedMode)
         } else if let defaultMode = defaultModeId {
             // Apply the default mode from initialize response for new sessions
             currentSessionViewModel?.setCurrentModeId(defaultMode)
+            currentSessionViewModel?.setAvailableModes(availableModes, currentModeId: defaultMode)
         }
         // Note: defaultModeId is set from initialize response and applied to new sessions
 

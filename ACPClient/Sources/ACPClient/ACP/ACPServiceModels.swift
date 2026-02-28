@@ -220,3 +220,23 @@ public struct ACPSessionSetModePayload: Sendable {
         ])
     }
 }
+
+public struct ACPSessionSetConfigOptionPayload: Sendable {
+    public var sessionId: String
+    public var configId: String
+    public var value: ACPSessionConfigOptionValue
+
+    public init(sessionId: String, configId: String, value: ACPSessionConfigOptionValue) {
+        self.sessionId = sessionId
+        self.configId = configId
+        self.value = value
+    }
+
+    func params() -> ACP.Value {
+        .object([
+            "sessionId": .string(sessionId),
+            "configId": .string(configId),
+            "value": value.acpValue
+        ])
+    }
+}

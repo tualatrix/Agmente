@@ -124,4 +124,35 @@ struct ACPServiceTests {
         let requests = await MainActor.run { delegate.sentRequests }
         #expect(requests.last?.method == "session/load")
     }
+
+    @Test func setSessionConfigOptionSendsRequestAndResolvesResponse() async throws {
+        let provider = MockWebSocketProvider()
+        let client = ACPClient(
+            configuration: .init(endpoint: URL(string: "wss://example.com/socket")!),
+            socketProvider: provider
+        )
+        let delegate = CapturingServiceDelegate()
+        let service = ACPService(client: client)
+        service.delegate = delegate
+
+        try await service.connect()
+
+        Task {
+            let response = ACPWireMessage.response(.init(id: .int(1), result: .object(["status": .string("ok")])))
+            let encoded = try JSONEncoder().encode(response)
+            let text = String(decoding: encoded, as: UTF8.self)
+            provider.connection.enqueue(.text(text))
+        }
+
+        let payload = ACPSessionSetConfigOptionPayload(
+            sessionId: "session-1",
+            configId: "mode",
+            value: .string("code")
+        )
+        let response = try await service.setSessionConfigOption(payload)
+
+        #expect(response.resultValue == .object(["status": .string("ok")]))
+        let requests = await MainActor.run { delegate.sentRequests }
+        #expect(requests.last?.method == "session/set_config_option")
+    }
 }

@@ -2330,6 +2330,11 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
         case .sessionActivated(let activation):
             debugLog("applyResponseAction: sessionActivated with \(activation.sessionId)")
             setActiveSession(activation.sessionId, cwd: activation.cwd, modes: activation.modes)
+            sessionViewModel?.applySessionConfigOptions(
+                activation.configOptions,
+                serverId: serverId,
+                sessionId: activation.sessionId
+            )
             
         case .sessionMaterialized(let sessionId):
             connectionManager.markSessionMaterialized(sessionId)
@@ -2338,6 +2343,10 @@ final class AppViewModel: ObservableObject, ACPClientManagerDelegate, ACPSession
             sessionViewModel?.setCurrentModeId(modeId)
             sessionViewModel?.cacheCurrentMode(serverId: serverId, sessionId: sessionId)
             append("Mode changed to: \(modeId)")
+
+        case .configOptionsChanged(let options):
+            sessionViewModel?.applySessionConfigOptions(options, serverId: serverId, sessionId: sessionId)
+            append("Config options updated (\(options.count))")
 
         case .initialized(let result):
             applyInitializeResult(result, serverId: serverId)

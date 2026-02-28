@@ -89,6 +89,43 @@ final class SessionResponseParsingTests: XCTestCase {
         XCTAssertNil(parsed?.modes?.availableModes[1].description)
         XCTAssertEqual(parsed?.modes?.currentModeId, "mode-1")
     }
+
+    func testParseSessionNewWithConfigOptionsSynthesizesModeInfo() {
+        let result: ACP.Value = .object([
+            "sessionId": .string("session-123"),
+            "configOptions": .array([
+                .object([
+                    "id": .string("mode"),
+                    "name": .string("Mode"),
+                    "category": .string("mode"),
+                    "type": .string("select"),
+                    "currentValue": .string("code"),
+                    "options": .array([
+                        .object([
+                            "value": .string("ask"),
+                            "name": .string("Ask")
+                        ]),
+                        .object([
+                            "value": .string("code"),
+                            "name": .string("Code")
+                        ])
+                    ])
+                ]),
+                .object([
+                    "id": .string("brave_mode"),
+                    "name": .string("Brave Mode"),
+                    "type": .string("boolean"),
+                    "currentValue": .bool(true)
+                ])
+            ])
+        ])
+
+        let parsed = ACPSessionResponseParser.parseSessionNew(result: result)
+
+        XCTAssertEqual(parsed?.configOptions.count, 2)
+        XCTAssertEqual(parsed?.modes?.availableModes.count, 2)
+        XCTAssertEqual(parsed?.modes?.currentModeId, "code")
+    }
     
     func testParseSessionNewWithFallbacks() {
         let result: ACP.Value = .object([:])
@@ -266,6 +303,31 @@ final class SessionResponseParsingTests: XCTestCase {
         
         XCTAssertNotNil(parsed)
         XCTAssertEqual(parsed?.currentModeId, "basic")
+    }
+
+    func testParseConfigOptionsResponse() {
+        let result: ACP.Value = .object([
+            "configOptions": .array([
+                .object([
+                    "id": .string("model"),
+                    "name": .string("Model"),
+                    "type": .string("select"),
+                    "currentValue": .string("gpt-5"),
+                    "options": .array([
+                        .object([
+                            "value": .string("gpt-5"),
+                            "name": .string("GPT-5")
+                        ])
+                    ])
+                ])
+            ])
+        ])
+
+        let parsed = ACPSessionResponseParser.parseConfigOptions(result: result)
+
+        XCTAssertEqual(parsed.count, 1)
+        XCTAssertEqual(parsed.first?.id, "model")
+        XCTAssertEqual(parsed.first?.selectedChoiceName, "GPT-5")
     }
     
     func testParseSetModeNilResult() {

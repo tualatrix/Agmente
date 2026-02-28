@@ -203,6 +203,49 @@ final class ResponseDispatcherTests: XCTestCase {
             return false
         })
     }
+
+    func testSetConfigOptionDispatch() {
+        let result: ACP.Value = .object([
+            "configOptions": .array([
+                .object([
+                    "id": .string("mode"),
+                    "name": .string("Mode"),
+                    "category": .string("mode"),
+                    "type": .string("select"),
+                    "currentValue": .string("code"),
+                    "options": .array([
+                        .object([
+                            "value": .string("ask"),
+                            "name": .string("Ask")
+                        ]),
+                        .object([
+                            "value": .string("code"),
+                            "name": .string("Code")
+                        ])
+                    ])
+                ])
+            ])
+        ])
+
+        let actions = ACPResponseDispatcher.dispatchSuccess(
+            result: result,
+            method: "session/set_config_option",
+            context: ACPResponseDispatchContext()
+        )
+
+        XCTAssertTrue(actions.contains { action in
+            if case .configOptionsChanged(let options) = action {
+                return options.count == 1 && options[0].id == "mode"
+            }
+            return false
+        })
+        XCTAssertTrue(actions.contains { action in
+            if case .modeChanged(let modeId) = action {
+                return modeId == "code"
+            }
+            return false
+        })
+    }
     
     // MARK: - Initialize Tests
     

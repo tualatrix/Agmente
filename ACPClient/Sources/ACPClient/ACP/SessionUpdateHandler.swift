@@ -22,6 +22,9 @@ public enum ACPSessionUpdateEvent: Equatable, Sendable {
     
     /// The agent's current mode has changed.
     case modeChange(modeId: String)
+
+    /// Session config options changed.
+    case configOptionsUpdate(options: [ACPSessionConfigOption])
     
     /// Available slash commands have been updated.
     case availableCommandsUpdate(commands: [SessionCommand])
@@ -136,6 +139,11 @@ public final class ACPSessionUpdateHandler: Sendable {
                 return [.modeChange(modeId: modeId)]
             }
             return []
+
+        case "config_option_update":
+            let options = ACPSessionConfigOptionParser.parse(from: update)
+            guard !options.isEmpty else { return [] }
+            return [.configOptionsUpdate(options: options)]
             
         case "available_commands_update":
             let commands = parseAvailableCommands(from: update)

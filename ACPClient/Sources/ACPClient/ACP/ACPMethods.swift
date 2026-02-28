@@ -9,4 +9,5 @@ enum ACPMethods {
     static let sessionCancel = "session/cancel"
     static let sessionList = "session/list"
     static let sessionSetMode = "session/set_mode"
+    static let sessionSetConfigOption = "session/set_config_option"
 }

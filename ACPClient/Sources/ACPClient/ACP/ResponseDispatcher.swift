@@ -17,6 +17,9 @@ public enum ACPResponseAction: Sendable, Equatable {
     
     /// Mode was changed via session/set_mode.
     case modeChanged(modeId: String)
+
+    /// Session config options changed.
+    case configOptionsChanged([ACPSessionConfigOption])
     
     /// Initialize response was received.
     case initialized(ACPInitializeResult)
@@ -45,11 +48,18 @@ public struct ACPSessionActivation: Sendable, Equatable {
     public let sessionId: String
     public let cwd: String?
     public let modes: ACPModesInfo?
-    
-    public init(sessionId: String, cwd: String? = nil, modes: ACPModesInfo? = nil) {
+    public let configOptions: [ACPSessionConfigOption]
+
+    public init(
+        sessionId: String,
+        cwd: String? = nil,
+        modes: ACPModesInfo? = nil,
+        configOptions: [ACPSessionConfigOption] = []
+    ) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.modes = modes
+        self.configOptions = configOptions
     }
 }
 
@@ -150,6 +160,17 @@ public enum ACPResponseDispatcher {
                 actions.append(.modeChanged(modeId: setModeResult.currentModeId))
             }
         }
+
+        if method == ACPMethods.sessionSetConfigOption {
+            let configOptions = ACPSessionResponseParser.parseConfigOptions(result: result)
+            if !configOptions.isEmpty {
+                actions.append(.configOptionsChanged(configOptions))
+                if let modeInfo = ACPSessionConfigOptionParser.modeInfo(from: configOptions),
+                   let currentModeId = modeInfo.currentModeId {
+                    actions.append(.modeChanged(modeId: currentModeId))
+                }
+            }
+        }
         
         // Initialize response
         if isInitializeResponse(method: method, result: result) {
@@ -244,7 +265,8 @@ public enum ACPResponseDispatcher {
                 return ACPSessionActivation(
                     sessionId: parsed.sessionId,
                     cwd: parsed.cwd,
-                    modes: parsed.modes
+                    modes: parsed.modes,
+                    configOptions: parsed.configOptions
                 )
             }
         } else if method == "session/load" || method == "session/resume" {
@@ -258,7 +280,8 @@ public enum ACPResponseDispatcher {
                 return ACPSessionActivation(
                     sessionId: parsed.sessionId,
                     cwd: parsed.cwd,
-                    modes: parsed.modes
+                    modes: parsed.modes,
+                    configOptions: parsed.configOptions
                 )
             }
         } else if let id = result?.objectValue?["sessionId"]?.stringValue
@@ -266,7 +289,8 @@ public enum ACPResponseDispatcher {
             // Fallback for other methods that return a session ID
             let modes = ACPSessionResponseParser.parseModes(from: result?.objectValue)
             let cwd = result?.objectValue?["cwd"]?.stringValue
-            return ACPSessionActivation(sessionId: id, cwd: cwd, modes: modes)
+            let configOptions = ACPSessionResponseParser.parseConfigOptions(result: result)
+            return ACPSessionActivation(sessionId: id, cwd: cwd, modes: modes, configOptions: configOptions)
         }
         
         return nil

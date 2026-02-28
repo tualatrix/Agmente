@@ -404,8 +404,12 @@ private extension SessionDetailView {
             // Mode picker, working directory, and image attachment row
             HStack(spacing: 12) {
                 // Mode picker (if modes available)
-                if !model.availableModes.isEmpty {
+                if !sessionViewModel.availableModes.isEmpty {
                     modePicker
+                }
+
+                ForEach(sessionViewModel.visibleConfigOptions(), id: \.id) { option in
+                    configOptionControl(for: option)
                 }
                 
                 // Working directory button
@@ -1032,7 +1036,7 @@ private extension SessionDetailView {
 
     var modePicker: some View {
         Menu {
-            let modes: [AgentModeOption] = model.availableModes
+            let modes: [AgentModeOption] = sessionViewModel.availableModes
             ForEach(modes, id: \AgentModeOption.id) { (mode: AgentModeOption) in
                 Button {
                     model.sendSetMode(mode.id)
@@ -1066,10 +1070,76 @@ private extension SessionDetailView {
 
     var currentModeName: String {
         if let modeId = sessionViewModel.currentModeId,
-           let mode = model.availableModes.first(where: { $0.id == modeId }) {
+           let mode = sessionViewModel.availableModes.first(where: { $0.id == modeId }) {
             return mode.name
         }
-        return model.availableModes.first?.name ?? "Mode"
+        return sessionViewModel.availableModes.first?.name ?? "Mode"
+    }
+
+    @ViewBuilder
+    func configOptionControl(for option: ACPSessionConfigOption) -> some View {
+        switch option.kind {
+        case .select(let choices):
+            Menu {
+                ForEach(choices) { choice in
+                    Button {
+                        sessionViewModel.sendSetConfigOption(
+                            configId: option.id,
+                            value: .string(choice.id),
+                            sessionId: serverViewModel.sessionId,
+                            serverId: model.selectedServerId
+                        )
+                    } label: {
+                        HStack {
+                            Text(choice.name)
+                            if option.currentValue.stringValue == choice.id {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.footnote.weight(.semibold))
+                    Text(option.selectedChoiceName ?? option.name)
+                        .font(.footnote.weight(.medium))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(.systemGray5))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .menuStyle(.borderlessButton)
+        case .boolean:
+            Button {
+                let currentValue = option.currentValue.boolValue ?? false
+                sessionViewModel.sendSetConfigOption(
+                    configId: option.id,
+                    value: .bool(!currentValue),
+                    sessionId: serverViewModel.sessionId,
+                    serverId: model.selectedServerId
+                )
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: (option.currentValue.boolValue ?? false) ? "checkmark.circle.fill" : "circle")
+                        .font(.footnote.weight(.semibold))
+                    Text(option.name)
+                        .font(.footnote.weight(.medium))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background((option.currentValue.boolValue ?? false) ? Color.green.opacity(0.15) : Color(.systemGray5))
+                .foregroundStyle((option.currentValue.boolValue ?? false) ? Color.green : Color.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        case .unknown:
+            EmptyView()
+        }
     }
 
     func iconForMode(_ modeId: String?) -> String {

@@ -80,6 +80,10 @@ public final class ACPService {
         try await sendRequest(method: ACPMethods.sessionSetMode, params: payload.params())
     }
 
+    public func setSessionConfigOption(_ payload: ACPSessionSetConfigOptionPayload) async throws -> ACP.AnyResponse {
+        try await sendRequest(method: ACPMethods.sessionSetConfigOption, params: payload.params())
+    }
+
     /// Sends an arbitrary JSON-RPC request and awaits the response.
     /// Useful for optional ACP methods that don't yet have typed wrappers.
     public func call(method: String, params: ACP.Value? = nil) async throws -> ACP.AnyResponse {

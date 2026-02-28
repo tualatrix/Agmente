@@ -68,6 +68,8 @@ final class ACPSessionViewModel: ObservableObject {
     }
 
     @Published private(set) var currentModeId: String?
+    @Published private(set) var availableModes: [AgentModeOption] = []
+    @Published private(set) var sessionConfigOptions: [ACPSessionConfigOption] = []
     @Published private(set) var availableCommands: [SessionCommand] = []
     @Published var promptText: String = ""
     @Published var selectedCommandName: String?
@@ -150,6 +152,33 @@ final class ACPSessionViewModel: ObservableObject {
 
     func setCurrentModeId(_ modeId: String?) {
         currentModeId = modeId
+    }
+
+    func setAvailableModes(_ modes: [AgentModeOption], currentModeId: String? = nil) {
+        availableModes = modes
+        if let currentModeId {
+            self.currentModeId = currentModeId
+        }
+    }
+
+    func applySessionConfigOptions(
+        _ options: [ACPSessionConfigOption],
+        serverId: UUID?,
+        sessionId: String
+    ) {
+        sessionConfigOptions = options
+
+        if let modeInfo = ACPSessionConfigOptionParser.modeInfo(from: options) {
+            availableModes = modeInfo.availableModes
+            if let modeId = modeInfo.currentModeId {
+                currentModeId = modeId
+                cacheCurrentMode(serverId: serverId, sessionId: sessionId)
+            }
+        }
+    }
+
+    func visibleConfigOptions() -> [ACPSessionConfigOption] {
+        sessionConfigOptions.filter { !$0.isModeSelector }
     }
 
     func cacheCurrentMode(serverId: UUID?, sessionId: String) {
@@ -249,16 +278,67 @@ final class ACPSessionViewModel: ObservableObject {
             return
         }
 
-        let payload = ACPSessionSetModePayload(sessionId: sessionId, modeId: modeId)
-
         Task { @MainActor in
             do {
-                _ = try await service.setSessionMode(payload)
+                if let modeOption = sessionConfigOptions.first(where: { $0.isModeSelector }) {
+                    let payload = ACPSessionSetConfigOptionPayload(
+                        sessionId: sessionId,
+                        configId: modeOption.id,
+                        value: .string(modeId)
+                    )
+                    _ = try await service.setSessionConfigOption(payload)
+                } else {
+                    let payload = ACPSessionSetModePayload(sessionId: sessionId, modeId: modeId)
+                    _ = try await service.setSessionMode(payload)
+                }
                 setCurrentModeId(modeId)
                 cacheCurrentMode(serverId: serverId, sessionId: sessionId)
                 dependencies.append("Set mode to: \(modeId)")
             } catch {
                 dependencies.append("Failed to set mode: \(error)")
+            }
+        }
+    }
+
+    func sendSetConfigOption(
+        configId: String,
+        value: ACPSessionConfigOptionValue,
+        sessionId: String,
+        serverId: UUID?
+    ) {
+        guard let service = dependencies.getService() else {
+            dependencies.append("Not connected")
+            return
+        }
+        guard !sessionId.isEmpty else {
+            dependencies.append("No active session")
+            return
+        }
+
+        let payload = ACPSessionSetConfigOptionPayload(
+            sessionId: sessionId,
+            configId: configId,
+            value: value
+        )
+
+        Task { @MainActor in
+            do {
+                _ = try await service.setSessionConfigOption(payload)
+                if let index = sessionConfigOptions.firstIndex(where: { $0.id == configId }) {
+                    let existing = sessionConfigOptions[index]
+                    sessionConfigOptions[index] = ACPSessionConfigOption(
+                        id: existing.id,
+                        name: existing.name,
+                        description: existing.description,
+                        category: existing.category,
+                        kind: existing.kind,
+                        currentValue: value
+                    )
+                    applySessionConfigOptions(sessionConfigOptions, serverId: serverId, sessionId: sessionId)
+                }
+                dependencies.append("Updated \(configId)")
+            } catch {
+                dependencies.append("Failed to update \(configId): \(error)")
             }
         }
     }
@@ -619,6 +699,10 @@ final class ACPSessionViewModel: ObservableObject {
             if let serverId = serverId {
                 eventDelegate?.sessionModeDidChange(modeId, serverId: serverId, sessionId: sessionId)
             }
+
+        case .configOptionsUpdate(let options):
+            applySessionConfigOptions(options, serverId: serverId, sessionId: sessionId)
+            dependencies.append("Config options updated (\(options.count))")
 
         case .availableCommandsUpdate(let commands):
             handleAvailableCommandsUpdate(
